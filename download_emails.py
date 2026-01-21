@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Download Outlook emails and attachments received today.
+Outlook Email Tool - Download and send emails via Microsoft Graph API.
 Reuses authentication from clockify-automation.
 """
 import os
@@ -31,7 +31,7 @@ MICROSOFT_CONFIG = {
     "client_secret": os.environ.get("MS_CLIENT_SECRET"),
     "tenant_id": os.environ.get("MS_TENANT_ID"),
     "redirect_uri": os.environ.get("MS_REDIRECT_URI", "http://localhost:8000/callback"),
-    "scopes": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+    "scopes": ["Mail.Read", "Mail.ReadWrite", "Mail.Send", "User.Read"],
     "authority": f"https://login.microsoftonline.com/{os.environ.get('MS_TENANT_ID', 'common')}",
     "graph_endpoint": "https://graph.microsoft.com/v1.0",
     "user_email": os.environ.get("MS_USER_EMAIL", "")
@@ -305,23 +305,64 @@ class OutlookEmailDownloader:
         print(f"\nDownloaded {attachment_count} attachments to {attachments_dir}")
         print(f"\nAll files saved to: {session_dir}")
 
+    def send_email(self, to: List[str], subject: str, body: str, body_type: str = "Text") -> bool:
+        """
+        Send an email.
 
-def main():
-    import argparse
+        Args:
+            to: List of recipient email addresses
+            subject: Email subject
+            body: Email body content
+            body_type: "Text" or "HTML"
 
-    parser = argparse.ArgumentParser(description="Download Outlook emails and attachments from today")
-    parser.add_argument("--no-attachments", action="store_true", help="Skip downloading attachments")
-    parser.add_argument("--output", "-o", default=str(DOWNLOADS_DIR), help="Output directory")
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
 
-    args = parser.parse_args()
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        url = f"{self.graph_endpoint}/{user_path}/sendMail"
 
+        # Build recipient list
+        to_recipients = [
+            {"emailAddress": {"address": addr}} for addr in to
+        ]
+
+        message = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": body_type,
+                    "content": body
+                },
+                "toRecipients": to_recipients
+            },
+            "saveToSentItems": True
+        }
+
+        print(f"\nSending email...")
+        print(f"  To: {', '.join(to)}")
+        print(f"  Subject: {subject}")
+
+        response = requests.post(url, headers=self._get_headers(), json=message)
+
+        if response.status_code == 202:
+            print("Email sent successfully!")
+            return True
+        else:
+            print(f"Error sending email: {response.status_code} - {response.text}")
+            return False
+
+
+def cmd_download(args):
+    """Download emails command."""
     downloader = OutlookEmailDownloader()
 
     print("=" * 60)
     print("Outlook Email Downloader")
     print("=" * 60)
 
-    # Fail fast: check authentication first
     if not MICROSOFT_CONFIG.get("client_id"):
         print("ERROR: MS_CLIENT_ID not set. Check .env file in clockify-automation.")
         sys.exit(1)
@@ -330,7 +371,6 @@ def main():
         print("ERROR: Authentication failed!")
         sys.exit(1)
 
-    # Fetch today's emails
     emails = downloader.fetch_received_emails_today(
         download_attachments=not args.no_attachments
     )
@@ -339,10 +379,8 @@ def main():
         print("\nNo emails received today.")
         return
 
-    # Save to disk
     downloader.save_emails(emails, Path(args.output))
 
-    # Summary
     print("\n" + "=" * 60)
     print("Summary")
     print("=" * 60)
@@ -354,6 +392,64 @@ def main():
         att_count = len(email.attachments)
         att_str = f" [{att_count} attachments]" if att_count else ""
         print(f"  - {email.date[:16]} | {email.sender[:30]} | {email.subject[:40]}{att_str}")
+
+
+def cmd_send(args):
+    """Send email command."""
+    downloader = OutlookEmailDownloader()
+
+    print("=" * 60)
+    print("Outlook Email Sender")
+    print("=" * 60)
+
+    if not MICROSOFT_CONFIG.get("client_id"):
+        print("ERROR: MS_CLIENT_ID not set. Check .env file in clockify-automation.")
+        sys.exit(1)
+
+    if not downloader.authenticate():
+        print("ERROR: Authentication failed!")
+        sys.exit(1)
+
+    recipients = [addr.strip() for addr in args.to.split(",")]
+    success = downloader.send_email(
+        to=recipients,
+        subject=args.subject,
+        body=args.body,
+        body_type="HTML" if args.html else "Text"
+    )
+
+    sys.exit(0 if success else 1)
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Outlook Email Tool - Download and send emails")
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # Download command
+    download_parser = subparsers.add_parser("download", help="Download today's emails")
+    download_parser.add_argument("--no-attachments", action="store_true", help="Skip downloading attachments")
+    download_parser.add_argument("--output", "-o", default=str(DOWNLOADS_DIR), help="Output directory")
+
+    # Send command
+    send_parser = subparsers.add_parser("send", help="Send an email")
+    send_parser.add_argument("--to", "-t", required=True, help="Recipient email(s), comma-separated")
+    send_parser.add_argument("--subject", "-s", required=True, help="Email subject")
+    send_parser.add_argument("--body", "-b", required=True, help="Email body")
+    send_parser.add_argument("--html", action="store_true", help="Send body as HTML")
+
+    args = parser.parse_args()
+
+    if args.command == "download":
+        cmd_download(args)
+    elif args.command == "send":
+        cmd_send(args)
+    else:
+        # Default to download for backwards compatibility
+        args.no_attachments = False
+        args.output = str(DOWNLOADS_DIR)
+        cmd_download(args)
 
 
 if __name__ == "__main__":
