@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-MCP Server for Outlook Email operations.
-Provides CRUD operations for emails via Model Context Protocol.
+MCP Server for Outlook Email and SharePoint operations.
+Provides CRUD operations for emails and files via Model Context Protocol.
 """
 import sys
 from datetime import datetime
@@ -226,6 +226,194 @@ def delete_email(email_id: str) -> dict:
         return {
             "success": success,
             "message": "Email moved to trash" if success else "Failed to delete email"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# SHAREPOINT - READ
+# =============================================================================
+
+# Default site for convenience
+DEFAULT_SITE = "xcellerateeq.sharepoint.com:/sites/DevTeam"
+
+
+@mcp.tool()
+def get_sharepoint_site(site_path: str = DEFAULT_SITE) -> dict:
+    """
+    Get SharePoint site information.
+
+    Args:
+        site_path: Site path like "xcellerateeq.sharepoint.com:/sites/DevTeam"
+
+    Returns:
+        dict with site info including site_id needed for other operations
+    """
+    try:
+        client = get_client()
+        site = client.get_sharepoint_site(site_path)
+        if not site:
+            return {"success": False, "error": "Site not found"}
+        return {
+            "success": True,
+            "site": {
+                "id": site.get("id", ""),
+                "name": site.get("displayName", ""),
+                "description": site.get("description", ""),
+                "web_url": site.get("webUrl", ""),
+                "created": site.get("createdDateTime", "")
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def list_sharepoint_drives(site_id: str) -> dict:
+    """
+    List document libraries (drives) in a SharePoint site.
+
+    Args:
+        site_id: The SharePoint site ID (get from get_sharepoint_site)
+
+    Returns:
+        dict with list of document libraries
+    """
+    try:
+        client = get_client()
+        drives = client.list_sharepoint_drives(site_id)
+        return {
+            "success": True,
+            "count": len(drives),
+            "drives": [
+                {
+                    "id": d.get("id", ""),
+                    "name": d.get("name", ""),
+                    "description": d.get("description", ""),
+                    "web_url": d.get("webUrl", ""),
+                    "drive_type": d.get("driveType", "")
+                }
+                for d in drives
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def list_sharepoint_files(site_id: str, drive_id: str = "", folder_path: str = "") -> dict:
+    """
+    List files in a SharePoint document library.
+
+    Args:
+        site_id: The SharePoint site ID
+        drive_id: The drive/document library ID (optional, uses default if empty)
+        folder_path: Path within the drive (optional, empty for root)
+
+    Returns:
+        dict with list of files
+    """
+    try:
+        client = get_client()
+        files = client.list_sharepoint_files(
+            site_id,
+            drive_id if drive_id else None,
+            folder_path
+        )
+        return {
+            "success": True,
+            "count": len(files),
+            "folder_path": folder_path or "/",
+            "files": [
+                {
+                    "id": f.id,
+                    "name": f.name,
+                    "size": f.size,
+                    "mime_type": f.mime_type,
+                    "web_url": f.web_url,
+                    "modified": f.modified,
+                    "modified_by": f.modified_by
+                }
+                for f in files
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def search_sharepoint_files(site_id: str, query: str) -> dict:
+    """
+    Search for files in a SharePoint site.
+
+    Args:
+        site_id: The SharePoint site ID
+        query: Search query string (searches file names and content)
+
+    Returns:
+        dict with list of matching files
+    """
+    try:
+        client = get_client()
+        files = client.search_sharepoint_files(site_id, query)
+        return {
+            "success": True,
+            "count": len(files),
+            "query": query,
+            "files": [
+                {
+                    "id": f.id,
+                    "name": f.name,
+                    "size": f.size,
+                    "mime_type": f.mime_type,
+                    "web_url": f.web_url,
+                    "modified": f.modified,
+                    "parent_path": f.parent_path
+                }
+                for f in files
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def get_sharepoint_file_info(site_id: str, drive_id: str, item_id: str) -> dict:
+    """
+    Get detailed information about a SharePoint file.
+
+    Args:
+        site_id: The SharePoint site ID
+        drive_id: The drive/document library ID
+        item_id: The file item ID
+
+    Returns:
+        dict with file details
+    """
+    try:
+        client = get_client()
+        url = f"{client.graph_endpoint}/sites/{site_id}/drives/{drive_id}/items/{item_id}"
+        response = __import__('requests').get(url, headers=client._get_headers())
+
+        if not response.ok:
+            return {"success": False, "error": f"File not found: {response.status_code}"}
+
+        item = response.json()
+        return {
+            "success": True,
+            "file": {
+                "id": item.get("id", ""),
+                "name": item.get("name", ""),
+                "size": item.get("size", 0),
+                "mime_type": item.get("file", {}).get("mimeType", ""),
+                "web_url": item.get("webUrl", ""),
+                "created": item.get("createdDateTime", ""),
+                "modified": item.get("lastModifiedDateTime", ""),
+                "created_by": item.get("createdBy", {}).get("user", {}).get("displayName", ""),
+                "modified_by": item.get("lastModifiedBy", {}).get("user", {}).get("displayName", ""),
+                "download_url": item.get("@microsoft.graph.downloadUrl", "")
+            }
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

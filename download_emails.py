@@ -31,7 +31,10 @@ MICROSOFT_CONFIG = {
     "client_secret": os.environ.get("MS_CLIENT_SECRET"),
     "tenant_id": os.environ.get("MS_TENANT_ID"),
     "redirect_uri": os.environ.get("MS_REDIRECT_URI", "http://localhost:8000/callback"),
-    "scopes": ["Mail.Read", "Mail.ReadWrite", "Mail.Send", "User.Read"],
+    "scopes": [
+        "Mail.Read", "Mail.ReadWrite", "Mail.Send", "User.Read",
+        "Sites.Read.All", "Sites.ReadWrite.All", "Files.Read.All", "Files.ReadWrite.All"
+    ],
     "authority": f"https://login.microsoftonline.com/{os.environ.get('MS_TENANT_ID', 'common')}",
     "graph_endpoint": "https://graph.microsoft.com/v1.0",
     "user_email": os.environ.get("MS_USER_EMAIL", "")
@@ -87,6 +90,24 @@ class Email:
         result = asdict(self)
         result['attachments'] = [a.to_dict() for a in self.attachments]
         return result
+
+
+@dataclass
+class SharePointFile:
+    """Represents a SharePoint/OneDrive file."""
+    id: str
+    name: str
+    size: int
+    web_url: str
+    created: str
+    modified: str
+    created_by: str
+    modified_by: str
+    mime_type: str
+    parent_path: str
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
 
 
 class OutlookEmailDownloader:
@@ -478,6 +499,174 @@ class OutlookEmailDownloader:
         )
 
         return response.ok
+
+    # =========================================================================
+    # SHAREPOINT METHODS
+    # =========================================================================
+
+    def get_sharepoint_site(self, site_path: str) -> Optional[Dict]:
+        """
+        Get SharePoint site info.
+
+        Args:
+            site_path: Site path like "xcellerateeq.sharepoint.com:/sites/DevTeam"
+
+        Returns:
+            Site info dict or None if not found
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        url = f"{self.graph_endpoint}/sites/{site_path}"
+        response = requests.get(url, headers=self._get_headers())
+
+        if not response.ok:
+            return None
+        return response.json()
+
+    def list_sharepoint_drives(self, site_id: str) -> List[Dict]:
+        """
+        List document libraries (drives) in a SharePoint site.
+
+        Args:
+            site_id: The SharePoint site ID
+
+        Returns:
+            List of drive info dicts
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        url = f"{self.graph_endpoint}/sites/{site_id}/drives"
+        response = requests.get(url, headers=self._get_headers())
+
+        if not response.ok:
+            raise RuntimeError(f"Error listing drives: {response.status_code} - {response.text}")
+
+        return response.json().get("value", [])
+
+    def list_sharepoint_files(
+        self,
+        site_id: str,
+        drive_id: str = None,
+        folder_path: str = "",
+        recursive: bool = False
+    ) -> List[SharePointFile]:
+        """
+        List files in a SharePoint document library.
+
+        Args:
+            site_id: The SharePoint site ID
+            drive_id: The drive/document library ID (uses default if None)
+            folder_path: Path within the drive (empty for root)
+            recursive: If True, list all files recursively
+
+        Returns:
+            List of SharePointFile objects
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        # Get default drive if not specified
+        if not drive_id:
+            drives = self.list_sharepoint_drives(site_id)
+            if not drives:
+                raise RuntimeError("No document libraries found in site")
+            drive_id = drives[0]["id"]
+
+        # Build URL based on folder path
+        if folder_path:
+            url = f"{self.graph_endpoint}/sites/{site_id}/drives/{drive_id}/root:/{folder_path}:/children"
+        else:
+            url = f"{self.graph_endpoint}/sites/{site_id}/drives/{drive_id}/root/children"
+
+        response = requests.get(url, headers=self._get_headers())
+
+        if not response.ok:
+            raise RuntimeError(f"Error listing files: {response.status_code} - {response.text}")
+
+        files = []
+        for item in response.json().get("value", []):
+            # Skip folders unless recursive
+            if "folder" in item and not recursive:
+                continue
+
+            files.append(SharePointFile(
+                id=item.get("id", ""),
+                name=item.get("name", ""),
+                size=item.get("size", 0),
+                web_url=item.get("webUrl", ""),
+                created=item.get("createdDateTime", ""),
+                modified=item.get("lastModifiedDateTime", ""),
+                created_by=item.get("createdBy", {}).get("user", {}).get("displayName", ""),
+                modified_by=item.get("lastModifiedBy", {}).get("user", {}).get("displayName", ""),
+                mime_type=item.get("file", {}).get("mimeType", "") if "file" in item else "folder",
+                parent_path=item.get("parentReference", {}).get("path", "")
+            ))
+
+        return files
+
+    def get_sharepoint_file_content(self, site_id: str, drive_id: str, item_id: str) -> Optional[bytes]:
+        """
+        Download SharePoint file content.
+
+        Args:
+            site_id: The SharePoint site ID
+            drive_id: The drive/document library ID
+            item_id: The file item ID
+
+        Returns:
+            File content as bytes or None if failed
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        url = f"{self.graph_endpoint}/sites/{site_id}/drives/{drive_id}/items/{item_id}/content"
+        response = requests.get(url, headers=self._get_headers())
+
+        if not response.ok:
+            return None
+        return response.content
+
+    def search_sharepoint_files(self, site_id: str, query: str) -> List[SharePointFile]:
+        """
+        Search for files in a SharePoint site.
+
+        Args:
+            site_id: The SharePoint site ID
+            query: Search query string
+
+        Returns:
+            List of matching SharePointFile objects
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        url = f"{self.graph_endpoint}/sites/{site_id}/drive/root/search(q='{query}')"
+        response = requests.get(url, headers=self._get_headers())
+
+        if not response.ok:
+            raise RuntimeError(f"Error searching files: {response.status_code} - {response.text}")
+
+        files = []
+        for item in response.json().get("value", []):
+            if "file" not in item:
+                continue  # Skip folders
+
+            files.append(SharePointFile(
+                id=item.get("id", ""),
+                name=item.get("name", ""),
+                size=item.get("size", 0),
+                web_url=item.get("webUrl", ""),
+                created=item.get("createdDateTime", ""),
+                modified=item.get("lastModifiedDateTime", ""),
+                created_by=item.get("createdBy", {}).get("user", {}).get("displayName", ""),
+                modified_by=item.get("lastModifiedBy", {}).get("user", {}).get("displayName", ""),
+                mime_type=item.get("file", {}).get("mimeType", ""),
+                parent_path=item.get("parentReference", {}).get("path", "")
+            ))
+
+        return files
 
 
 def cmd_download(args):
