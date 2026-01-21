@@ -354,6 +354,131 @@ class OutlookEmailDownloader:
             print(f"Error sending email: {response.status_code} - {response.text}")
             return False
 
+    def fetch_emails_range(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        download_attachments: bool = False
+    ) -> List[Email]:
+        """
+        Fetch received emails within a date range.
+
+        Args:
+            start_date: Start date
+            end_date: End date
+            download_attachments: Whether to download attachment content
+
+        Returns:
+            List of Email objects
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        start_str = start_date.strftime("%Y-%m-%dT00:00:00Z")
+        end_str = end_date.strftime("%Y-%m-%dT23:59:59Z")
+
+        filter_str = f"receivedDateTime ge {start_str} and receivedDateTime le {end_str}"
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        url = f"{self.graph_endpoint}/{user_path}/mailFolders/Inbox/messages"
+        params = {
+            "$filter": filter_str,
+            "$select": "id,subject,body,receivedDateTime,from,toRecipients,hasAttachments,conversationId,isRead",
+            "$orderby": "receivedDateTime desc",
+            "$top": 100
+        }
+
+        response = requests.get(url, headers=self._get_headers(), params=params)
+
+        if not response.ok:
+            raise RuntimeError(f"Error fetching emails: {response.status_code} - {response.text}")
+
+        data = response.json()
+        emails = []
+        for email_data in data.get("value", []):
+            emails.append(self._parse_email(email_data, download_attachments))
+
+        return emails
+
+    def fetch_email_by_id(self, email_id: str, download_attachments: bool = False) -> Optional[Email]:
+        """
+        Fetch a specific email by ID.
+
+        Args:
+            email_id: The email message ID
+            download_attachments: Whether to download attachment content
+
+        Returns:
+            Email object or None if not found
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        url = f"{self.graph_endpoint}/{user_path}/messages/{email_id}"
+        params = {
+            "$select": "id,subject,body,receivedDateTime,from,toRecipients,hasAttachments,conversationId,isRead"
+        }
+
+        response = requests.get(url, headers=self._get_headers(), params=params)
+
+        if response.status_code == 404:
+            return None
+        if not response.ok:
+            raise RuntimeError(f"Error fetching email: {response.status_code} - {response.text}")
+
+        return self._parse_email(response.json(), download_attachments)
+
+    def mark_email_read(self, email_id: str, is_read: bool = True) -> bool:
+        """
+        Mark an email as read or unread.
+
+        Args:
+            email_id: The email message ID
+            is_read: True to mark as read, False to mark as unread
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        url = f"{self.graph_endpoint}/{user_path}/messages/{email_id}"
+
+        response = requests.patch(
+            url,
+            headers=self._get_headers(),
+            json={"isRead": is_read}
+        )
+
+        return response.ok
+
+    def delete_email(self, email_id: str) -> bool:
+        """
+        Move an email to trash (soft delete).
+
+        Args:
+            email_id: The email message ID
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        # Move to deletedItems folder instead of hard delete
+        url = f"{self.graph_endpoint}/{user_path}/messages/{email_id}/move"
+
+        response = requests.post(
+            url,
+            headers=self._get_headers(),
+            json={"destinationId": "deleteditems"}
+        )
+
+        return response.ok
+
 
 def cmd_download(args):
     """Download emails command."""
