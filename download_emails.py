@@ -678,6 +678,124 @@ class OutlookEmailDownloader:
         return emails
 
     # =========================================================================
+    # ATTACHMENT METHODS
+    # =========================================================================
+
+    def list_attachments(self, email_id: str) -> List[Dict]:
+        """
+        List all attachments for an email.
+
+        Args:
+            email_id: The email message ID
+
+        Returns:
+            List of attachment info dicts with id, name, size, contentType
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        url = f"{self.graph_endpoint}/{user_path}/messages/{email_id}/attachments"
+
+        response = requests.get(url, headers=self._get_headers())
+
+        if not response.ok:
+            raise RuntimeError(f"Error listing attachments: {response.status_code} - {response.text}")
+
+        attachments = []
+        for att in response.json().get("value", []):
+            attachments.append({
+                "id": att.get("id", ""),
+                "name": att.get("name", ""),
+                "size": att.get("size", 0),
+                "content_type": att.get("contentType", ""),
+                "is_inline": att.get("isInline", False),
+                "attachment_type": att.get("@odata.type", "").replace("#microsoft.graph.", "")
+            })
+
+        return attachments
+
+    def download_attachment(self, email_id: str, attachment_id: str) -> Optional[Dict]:
+        """
+        Download an attachment's content.
+
+        Args:
+            email_id: The email message ID
+            attachment_id: The attachment ID
+
+        Returns:
+            Dict with name, content_type, size, and content (base64 encoded)
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        url = f"{self.graph_endpoint}/{user_path}/messages/{email_id}/attachments/{attachment_id}"
+
+        response = requests.get(url, headers=self._get_headers())
+
+        if not response.ok:
+            return None
+
+        data = response.json()
+
+        # contentBytes is base64 encoded
+        return {
+            "id": data.get("id", ""),
+            "name": data.get("name", ""),
+            "size": data.get("size", 0),
+            "content_type": data.get("contentType", ""),
+            "content_base64": data.get("contentBytes", "")
+        }
+
+    def save_attachment(
+        self,
+        email_id: str,
+        attachment_id: str,
+        output_dir: Path = None
+    ) -> Optional[Path]:
+        """
+        Download and save an attachment to disk.
+
+        Args:
+            email_id: The email message ID
+            attachment_id: The attachment ID
+            output_dir: Directory to save to (default: downloads folder)
+
+        Returns:
+            Path to saved file or None if failed
+        """
+        if output_dir is None:
+            output_dir = DOWNLOADS_DIR / "attachments"
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        attachment = self.download_attachment(email_id, attachment_id)
+        if not attachment or not attachment.get("content_base64"):
+            return None
+
+        # Decode and save
+        content = base64.b64decode(attachment["content_base64"])
+
+        # Sanitize filename
+        safe_name = re.sub(r'[<>:"/\\|?*]', '_', attachment["name"])
+        filepath = output_dir / safe_name
+
+        # Handle duplicate names
+        counter = 1
+        original_filepath = filepath
+        while filepath.exists():
+            stem = original_filepath.stem
+            suffix = original_filepath.suffix
+            filepath = output_dir / f"{stem}_{counter}{suffix}"
+            counter += 1
+
+        with open(filepath, "wb") as f:
+            f.write(content)
+
+        return filepath
+
+    # =========================================================================
     # SHAREPOINT METHODS
     # =========================================================================
 

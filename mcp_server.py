@@ -316,6 +316,75 @@ def get_email(email_id: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+@mcp.tool()
+def list_email_attachments(email_id: str) -> dict:
+    """
+    List all attachments for an email.
+
+    Args:
+        email_id: The email message ID
+
+    Returns:
+        dict with list of attachments including their IDs for downloading
+    """
+    try:
+        client = get_client()
+        attachments = client.list_attachments(email_id)
+        return {
+            "success": True,
+            "count": len(attachments),
+            "email_id": email_id,
+            "attachments": attachments
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def download_attachment(email_id: str, attachment_id: str, save_to_disk: bool = True) -> dict:
+    """
+    Download an email attachment.
+
+    Args:
+        email_id: The email message ID
+        attachment_id: The attachment ID (get from list_email_attachments)
+        save_to_disk: If True, saves file to downloads folder and returns path.
+                     If False, returns base64-encoded content.
+
+    Returns:
+        dict with attachment info and either file_path or content_base64
+    """
+    try:
+        client = get_client()
+
+        if save_to_disk:
+            # Save to disk
+            filepath = client.save_attachment(email_id, attachment_id)
+            if not filepath:
+                return {"success": False, "error": "Failed to download attachment"}
+            return {
+                "success": True,
+                "message": f"Attachment saved to {filepath}",
+                "file_path": str(filepath)
+            }
+        else:
+            # Return base64 content
+            attachment = client.download_attachment(email_id, attachment_id)
+            if not attachment:
+                return {"success": False, "error": "Failed to download attachment"}
+            return {
+                "success": True,
+                "attachment": {
+                    "name": attachment["name"],
+                    "size": attachment["size"],
+                    "content_type": attachment["content_type"],
+                    "content_base64": attachment["content_base64"]
+                }
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # =============================================================================
 # UPDATE
 # =============================================================================
