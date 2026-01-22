@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-MCP Server for Outlook Email and SharePoint operations.
-Provides CRUD operations for emails and files via Model Context Protocol.
+MCP Server for Outlook Email, SharePoint, and Monday.com operations.
+Provides CRUD operations for emails, files, and project management via Model Context Protocol.
 """
 import sys
 from datetime import datetime
@@ -9,26 +9,43 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-# Import the email downloader
+# Import clients
 from download_emails import OutlookEmailDownloader, MICROSOFT_CONFIG
+from monday_client import MondayClient, MONDAY_CONFIG
 
 # Create MCP server
-mcp = FastMCP("outlook-email")
+mcp = FastMCP("outlook-monday")
 
-# Global client instance (authenticated lazily)
-_client: Optional[OutlookEmailDownloader] = None
+# Global client instances (authenticated lazily)
+_outlook_client: Optional[OutlookEmailDownloader] = None
+_monday_client: Optional[MondayClient] = None
 
 
-def get_client() -> OutlookEmailDownloader:
-    """Get authenticated email client (singleton)."""
-    global _client
-    if _client is None:
-        _client = OutlookEmailDownloader()
+def get_outlook_client() -> OutlookEmailDownloader:
+    """Get authenticated Outlook email client (singleton)."""
+    global _outlook_client
+    if _outlook_client is None:
+        _outlook_client = OutlookEmailDownloader()
         if not MICROSOFT_CONFIG.get("client_id"):
             raise RuntimeError("MS_CLIENT_ID not set. Check .env file.")
-        if not _client.authenticate():
+        if not _outlook_client.authenticate():
             raise RuntimeError("Authentication failed")
-    return _client
+    return _outlook_client
+
+
+def get_monday_client() -> MondayClient:
+    """Get Monday.com client (singleton)."""
+    global _monday_client
+    if _monday_client is None:
+        if not MONDAY_CONFIG.get("api_key"):
+            raise RuntimeError("MONDAY_API_KEY not set. Check .env file.")
+        _monday_client = MondayClient()
+    return _monday_client
+
+
+# Alias for backwards compatibility
+def get_client() -> OutlookEmailDownloader:
+    return get_outlook_client()
 
 
 # =============================================================================
@@ -420,9 +437,285 @@ def get_sharepoint_file_info(site_id: str, drive_id: str, item_id: str) -> dict:
 
 
 # =============================================================================
+# MONDAY.COM - READ
+# =============================================================================
+
+@mcp.tool()
+def list_monday_boards(limit: int = 50) -> dict:
+    """
+    List all Monday.com boards accessible to the user.
+
+    Args:
+        limit: Maximum number of boards to return (default 50)
+
+    Returns:
+        dict with list of boards
+    """
+    try:
+        client = get_monday_client()
+        boards = client.list_boards(limit=limit)
+        return {
+            "success": True,
+            "count": len(boards),
+            "boards": [
+                {
+                    "id": b.id,
+                    "name": b.name,
+                    "description": b.description,
+                    "state": b.state,
+                    "board_kind": b.board_kind
+                }
+                for b in boards
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def get_monday_board(board_id: str) -> dict:
+    """
+    Get details of a specific Monday.com board.
+
+    Args:
+        board_id: The board ID
+
+    Returns:
+        dict with board details including columns
+    """
+    try:
+        client = get_monday_client()
+        board = client.get_board(board_id)
+        if not board:
+            return {"success": False, "error": "Board not found"}
+
+        columns = client.get_columns(board_id)
+        groups = client.list_groups(board_id)
+
+        return {
+            "success": True,
+            "board": {
+                "id": board.id,
+                "name": board.name,
+                "description": board.description,
+                "state": board.state,
+                "board_kind": board.board_kind
+            },
+            "columns": [
+                {"id": c.get("id"), "title": c.get("title"), "type": c.get("type")}
+                for c in columns
+            ],
+            "groups": [
+                {"id": g.id, "title": g.title, "color": g.color}
+                for g in groups
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def list_monday_items(board_id: str, limit: int = 100) -> dict:
+    """
+    List items (rows) in a Monday.com board.
+
+    Args:
+        board_id: The board ID
+        limit: Maximum number of items to return (default 100)
+
+    Returns:
+        dict with list of items
+    """
+    try:
+        client = get_monday_client()
+        items = client.list_items(board_id, limit=limit)
+        return {
+            "success": True,
+            "count": len(items),
+            "board_id": board_id,
+            "items": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "group_id": item.group_id,
+                    "state": item.state,
+                    "created_at": item.created_at,
+                    "updated_at": item.updated_at,
+                    "column_values": {
+                        k: v.get("text", "") for k, v in item.column_values.items()
+                    }
+                }
+                for item in items
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def get_monday_item(item_id: str) -> dict:
+    """
+    Get details of a specific Monday.com item.
+
+    Args:
+        item_id: The item ID
+
+    Returns:
+        dict with item details
+    """
+    try:
+        client = get_monday_client()
+        item = client.get_item(item_id)
+        if not item:
+            return {"success": False, "error": "Item not found"}
+
+        return {
+            "success": True,
+            "item": {
+                "id": item.id,
+                "name": item.name,
+                "board_id": item.board_id,
+                "group_id": item.group_id,
+                "state": item.state,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
+                "column_values": item.column_values
+            }
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# MONDAY.COM - WRITE
+# =============================================================================
+
+@mcp.tool()
+def create_monday_item(board_id: str, item_name: str, group_id: str = "", column_values: str = "") -> dict:
+    """
+    Create a new item in a Monday.com board.
+
+    Args:
+        board_id: The board ID
+        item_name: Name of the new item
+        group_id: Optional group ID (uses first group if empty)
+        column_values: Optional JSON string of column_id -> value mapping
+
+    Returns:
+        dict with created item details
+    """
+    try:
+        import json
+        client = get_monday_client()
+
+        col_vals = None
+        if column_values:
+            col_vals = json.loads(column_values)
+
+        item = client.create_item(
+            board_id=board_id,
+            item_name=item_name,
+            group_id=group_id if group_id else None,
+            column_values=col_vals
+        )
+
+        if not item:
+            return {"success": False, "error": "Failed to create item"}
+
+        return {
+            "success": True,
+            "message": f"Item '{item_name}' created",
+            "item": {
+                "id": item.id,
+                "name": item.name,
+                "board_id": item.board_id
+            }
+        }
+    except json.JSONDecodeError as e:
+        return {"success": False, "error": f"Invalid JSON for column_values: {e}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def update_monday_item(board_id: str, item_id: str, column_values: str) -> dict:
+    """
+    Update column values of a Monday.com item.
+
+    Args:
+        board_id: The board ID
+        item_id: The item ID
+        column_values: JSON string of column_id -> value mapping
+
+    Returns:
+        dict with success status
+    """
+    try:
+        import json
+        client = get_monday_client()
+
+        col_vals = json.loads(column_values)
+        success = client.update_item(board_id, item_id, col_vals)
+
+        return {
+            "success": success,
+            "message": "Item updated" if success else "Failed to update item"
+        }
+    except json.JSONDecodeError as e:
+        return {"success": False, "error": f"Invalid JSON for column_values: {e}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def delete_monday_item(item_id: str) -> dict:
+    """
+    Delete a Monday.com item.
+
+    Args:
+        item_id: The item ID
+
+    Returns:
+        dict with success status
+    """
+    try:
+        client = get_monday_client()
+        success = client.delete_item(item_id)
+        return {
+            "success": success,
+            "message": "Item deleted" if success else "Failed to delete item"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def move_monday_item(item_id: str, group_id: str) -> dict:
+    """
+    Move a Monday.com item to a different group.
+
+    Args:
+        item_id: The item ID
+        group_id: Target group ID
+
+    Returns:
+        dict with success status
+    """
+    try:
+        client = get_monday_client()
+        success = client.move_item_to_group(item_id, group_id)
+        return {
+            "success": success,
+            "message": f"Item moved to group {group_id}" if success else "Failed to move item"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
 if __name__ == "__main__":
-    print("Starting Outlook Email MCP Server...", file=sys.stderr)
+    print("Starting Outlook/SharePoint/Monday MCP Server...", file=sys.stderr)
     mcp.run()
