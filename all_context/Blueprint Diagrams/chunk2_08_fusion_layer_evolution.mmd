@@ -1,0 +1,63 @@
+%% Fusion Layer Evolution: From Flashpoint v0.1 to Full Multi-Modal Fusion
+%% Shows the path from current implementation to Blueprint end-state
+
+flowchart LR
+    subgraph "v0.1: Flashpoint (PR 56)"
+        V1_IN1[hume_tension]
+        V1_IN2[hume_distress]
+        V1_LOGIC[Simple AND<br/>Both > 0.35]
+        V1_OUT[flashpoint<br/>event]
+
+        V1_IN1 --> V1_LOGIC
+        V1_IN2 --> V1_LOGIC
+        V1_LOGIC --> V1_OUT
+    end
+
+    subgraph "v0.2: Enhanced Flashpoint (Future)"
+        V2_IN1[hume_tension]
+        V2_IN2[hume_distress]
+        V2_IN3[hume_arousal]
+        V2_IN4[hume_valence]
+        V2_LOGIC[Weighted Score<br/>Confidence 0-1]
+        V2_OUT[flashpoint<br/>+ confidence]
+
+        V2_IN1 --> V2_LOGIC
+        V2_IN2 --> V2_LOGIC
+        V2_IN3 --> V2_LOGIC
+        V2_IN4 --> V2_LOGIC
+        V2_LOGIC --> V2_OUT
+    end
+
+    subgraph "v1.0: Full Fusion Layer (Blueprint End-State)"
+        V3_IN1[interruption_detector]
+        V3_IN2[tone_shift_detector]
+        V3_IN3[hume_audio signals]
+        V3_IN4[hume_face signals]
+        V3_IN5[dominance_analyzer]
+
+        V3_CONF[Confidence<br/>Scoring]
+        V3_CORR[Cross-Modal<br/>Correlation]
+        V3_VOTE[Weighted<br/>Voting]
+        V3_THRESH[Adaptive<br/>Thresholds]
+
+        V3_VAL[Validation<br/>Layer]
+        V3_OUT[Validated<br/>Detections]
+
+        V3_IN1 --> V3_CONF
+        V3_IN2 --> V3_CONF
+        V3_IN3 --> V3_CONF
+        V3_IN4 --> V3_CONF
+        V3_IN5 --> V3_CONF
+
+        V3_CONF --> V3_CORR --> V3_VOTE --> V3_THRESH --> V3_VAL --> V3_OUT
+    end
+
+    V1_OUT -.->|evolves to| V2_LOGIC
+    V2_OUT -.->|evolves to| V3_CONF
+
+    style V1_LOGIC fill:#90EE90,stroke:#228B22,stroke-width:2px
+    style V2_LOGIC fill:#87CEEB,stroke:#4682B4,stroke-width:2px
+    style V3_CONF fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px
+    style V3_CORR fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px
+    style V3_VOTE fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px
+    style V3_THRESH fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px

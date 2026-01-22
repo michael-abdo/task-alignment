@@ -1,0 +1,94 @@
+flowchart TB
+    subgraph "Data Sources"
+        RTMS[Real-Time Media Streams]
+        ZOOM[Zoom RTMS API]
+        TRANS[Transcription Service]
+    end
+
+    subgraph "Event Processing Layer"
+        EP[Event Publisher]
+        REDIS[(Redis Cache)]
+        
+        EP -->|Cache metrics| REDIS
+    end
+
+    subgraph "Analytics Services"
+        TTS[Talk Time Analytics Service<br/>✅ Completed]
+        IDS[Interruption Detection Service<br/>✅ Completed]
+        DAS[Dominance Analyzer Service<br/>✅ Completed]
+        TAS[Tone Shift Detector<br/>✅ Completed]
+        SSS[Safety Score<br/>✅ Completed]
+        FDS[Fatigue Detector<br/>✅ Completed]
+
+        TTS -->|Calculate| GINI[Gini Coefficient<br/>Participation Equality]
+        TTS -->|Track| SPT[Speaking Time per Participant]
+        TTS -->|Count| WC[Words Spoken]
+        TTS -->|Measure| PACE[Speech Pace<br/>Words/Minute]
+        DAS -->|Analyze| DOM[Dominant Speaker Detection]
+    end
+
+    subgraph "Storage Layer"
+        PG[(PostgreSQL)]
+        S3[(S3 Storage)]
+        
+        PG -->|Store| ANALYTICS[MeetingAnalytics Table]
+        PG -->|Store| SESSION[AnalyticsSessionSummary]
+    end
+
+    subgraph "API Layer"
+        API[Analytics API]
+        API -->|Query| REDIS
+        API -->|Query| PG
+    end
+
+    subgraph "UI Components"
+        DASH[Analytics Dashboard]
+        RT[Real-Time Display]
+    end
+
+    subgraph "Current Metrics"
+        M1[Talk Time Distribution]
+        M2[Participation Equality<br/>0-1 Score]
+        M3[Speech Pace<br/>WPM]
+        M4[Engagement Score<br/>0-100]
+        M5[Basic Sentiment<br/>Keyword Matching]
+    end
+
+    %% Data Flow
+    ZOOM -->|Audio/Video| RTMS
+    RTMS -->|Events| EP
+    TRANS -->|Text| EP
+    
+    EP -->|Subscribe| TTS
+    EP -->|Subscribe| IDS
+    EP -->|Subscribe| DAS
+    EP -->|Subscribe| TAS
+    EP -->|Subscribe| SSS
+    EP -->|Subscribe| FDS
+
+    TTS -->|Publish Metrics| REDIS
+    IDS -->|Publish Events| REDIS
+    DAS -->|Publish Events| REDIS
+    TAS -->|Publish Events| REDIS
+    SSS -->|Publish Score| REDIS
+    FDS -->|Publish Alerts| REDIS
+    
+    TTS -->|Store| PG
+    RTMS -->|Raw Data| S3
+    
+    API -->|Serve| DASH
+    API -->|WebSocket| RT
+    
+    %% Metrics connections
+    TTS --> M1
+    GINI --> M2
+    PACE --> M3
+    TTS --> M4
+    TAS --> M5
+
+    style TTS fill:#ccffcc,stroke:#00aa00,stroke-width:2px
+    style IDS fill:#ccffcc,stroke:#00aa00,stroke-width:2px
+    style DAS fill:#ccffcc,stroke:#00aa00,stroke-width:2px
+    style TAS fill:#ccffcc,stroke:#00aa00,stroke-width:2px
+    style SSS fill:#ccffcc,stroke:#00aa00,stroke-width:2px
+    style FDS fill:#ccffcc,stroke:#00aa00,stroke-width:2px

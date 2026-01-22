@@ -1,0 +1,42 @@
+flowchart TB
+    subgraph "Tone False Positives"
+        TFP1[Technical Glitches]
+        TFP2[Cultural Differences]
+        TFP3[Sarcasm/Humor]
+        TFP4[Topic Changes]
+    end
+
+    subgraph "Validation Matrix"
+        VM[3x3 Validation Matrix]
+        
+        subgraph "Audio"
+            A_POS[Positive]
+            A_NEU[Neutral]
+            A_NEG[Negative]
+        end
+        
+        subgraph "Video"
+            V_POS[Positive]
+            V_NEU[Neutral]
+            V_NEG[Negative]
+        end
+        
+        subgraph "Text"
+            T_POS[Positive]
+            T_NEU[Neutral]
+            T_NEG[Negative]
+        end
+    end
+
+    subgraph "Decision Rules"
+        R1[All Agree → High Confidence]
+        R2[2/3 Agree → Medium Confidence]
+        R3[All Disagree → False Positive]
+        R4[Context Override → Special Case]
+    end
+
+    TFP1 & TFP2 & TFP3 & TFP4 --> VM
+    A_POS & V_POS & T_POS --> R1
+    A_NEG & V_NEU & T_NEG --> R2
+    A_POS & V_NEG & T_NEG --> R3
+    TFP2 & TFP3 --> R4

@@ -1,0 +1,20 @@
+flowchart LR
+    subgraph "Interruption Detection Logic"
+        SW[Speaking Windows]
+        OD[Overlap Detection]
+        IC[Interruption Counter]
+        
+        SW -->|Track per participant| TIMELINE[Timeline Buffer]
+        TIMELINE -->|Detect overlaps| OD
+        OD -->|Count by type| IC
+    end
+
+    subgraph "Interruption Types"
+        TYPE1[Supportive<br/>Brief overlaps]
+        TYPE2[Competitive<br/>Speaking over]
+        TYPE3[Collaborative<br/>Building on ideas]
+    end
+
+    IC --> TYPE1
+    IC --> TYPE2
+    IC --> TYPE3

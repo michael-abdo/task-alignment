@@ -1,0 +1,21 @@
+flowchart TB
+    subgraph "Feature-Focused Architecture"
+        subgraph "Unified Input"
+            ALL_SRC[All Sources]
+            UNI_STREAM[["Unified Event Stream"]]
+        end
+        
+        subgraph "Feature Plugins"
+            P_INT[interruption_detector<br/>Uses: A+V+T]
+            P_TONE[tone_shift_detector<br/>Uses: A+V+T]
+            P_SENT[sentiment_detector<br/>Uses: A+V+T]
+            P_NEW[new_feature<br/>Uses: A+V+T]
+        end
+    end
+
+    %% Architecture flow
+    ALL_SRC --> UNI_STREAM
+    UNI_STREAM --> P_INT & P_TONE & P_SENT & P_NEW
+
+    style UNI_STREAM fill:#4a90e2,stroke:#2e5fa1,stroke-width:3px
+    style P_NEW stroke-dasharray: 5 5,fill:#e8f5e9

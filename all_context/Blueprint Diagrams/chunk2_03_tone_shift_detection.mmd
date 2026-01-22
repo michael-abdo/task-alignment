@@ -1,0 +1,57 @@
+%% NOTE: This shows END-STATE multi-modal vision
+%% Phase 2 implementation uses Audio + Hume only (no video)
+%% Video integration planned for Phase 5
+
+flowchart TB
+    subgraph "Tone Change Triggers"
+        AUDIO_CHANGE[Audio Feature Change]
+        TEXT_SENT[Sentiment Shift]
+        VIDEO_EXP[Expression Change]
+    end
+
+    subgraph "Validation Pipeline"
+        subgraph "Audio Analysis"
+            A1[Pitch Variance > Threshold?]
+            A2[Volume Consistent?]
+            A3[Speech Rate Change?]
+        end
+
+        subgraph "Video Analysis"
+            V1[Facial Expression Match?]
+            V2[Body Language Aligned?]
+            V3[Eye Contact Maintained?]
+        end
+
+        subgraph "Text Analysis"
+            T1[Topic Continuity?]
+            T2[Emotional Words?]
+            T3[Sarcasm Detection]
+        end
+    end
+
+    subgraph "Confidence Scoring"
+        SCORE[Multi-Modal<br/>Confidence Score]
+        WEIGHT[Weighted<br/>Combination]
+    end
+
+    subgraph "Decision"
+        GENUINE[Genuine Tone Shift]
+        EMPHASIS[Emphasis Only]
+        TECHNICAL[Technical Issue]
+        NOISE[Background Noise]
+    end
+
+    AUDIO_CHANGE --> A1 & A2 & A3
+    TEXT_SENT --> T1 & T2 & T3
+    VIDEO_EXP --> V1 & V2 & V3
+
+    A1 & A2 & A3 --> WEIGHT
+    V1 & V2 & V3 --> WEIGHT
+    T1 & T2 & T3 --> WEIGHT
+
+    WEIGHT --> SCORE
+
+    SCORE -->|High| GENUINE
+    SCORE -->|Medium + Consistent| EMPHASIS
+    SCORE -->|Low + Audio Only| TECHNICAL
+    SCORE -->|Low + Inconsistent| NOISE

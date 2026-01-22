@@ -1,0 +1,114 @@
+flowchart TB
+    subgraph "Data Sources"
+        ZOOM[Zoom RTMS]
+        MIC[Microphone Array]
+        CAM[Camera Feed]
+        TRANS[Transcription Service]
+    end
+
+    subgraph "Unified Event Stream"
+        subgraph "Event Ingestion"
+            AUDIO_ING[Audio Ingestion]
+            VIDEO_ING[Video Ingestion]
+            TEXT_ING[Text Ingestion]
+        end
+
+        EVENT_BUS[["Multi-Modal Event Bus<br/>Kafka/Redis Streams"]]
+
+        subgraph "Event Schema"
+            SCHEMA[Unified Event Schema<br/>timestamp<br/>participant_id<br/>audio_features<br/>video_features<br/>text_content<br/>metadata]
+        end
+    end
+
+    subgraph "Feature Detection Layer"
+        subgraph "Core Features"
+            FD0[talk_time_analytics]
+            FD1[interruption_detector]
+            FD2[tone_shift_detector]
+            FD3[dominance_analyzer]
+            FD3b[role_dynamics_analyzer]
+            FD4[engagement_scorer]
+        end
+
+        subgraph "Extended Features"
+            FD5[anchoring_detector]
+            FD6[cognitive_load_monitor]
+            FD6b[groupthink_detector]
+            FD7[attention_tracker]
+            FD8[sentiment_detector]
+        end
+
+        subgraph "Future Features"
+            FD9[Custom Feature 1]
+            FD10[Custom Feature 2]
+            FDN[... Feature N]
+        end
+    end
+
+    subgraph "Feature Plugin Interface"
+        INTERFACE[["Standard Plugin Interface<br/>- Subscribe to Event Bus<br/>- Access All Modalities<br/>- Publish Results<br/>- Independent Scaling"]]
+    end
+
+    subgraph "Psychometric Profile Overlay (F05, Post-MVP-ST)"
+        subgraph "Profile Overlay Engine (C05a)"
+            ENRICH[["Context Enrichment<br/>─────────────────<br/>Receives: interruption_detector,<br/>sentiment_detector outputs<br/>Appends: decision_pressure_trait_pct,<br/>authority_deference_post_senior_pct,<br/>cal_gap"]]
+        end
+
+        subgraph "Drift Detection (C05b)"
+            DRIFT[["State vs Trait Drift<br/>─────────────────<br/>psych_safety_state vs trait<br/>time_pressure_state vs trait<br/>drift_flag if |delta| > 20"]]
+        end
+
+        PROFILE_DB[(Profile Store<br/>PostgreSQL)]
+    end
+
+    subgraph "Results Aggregation"
+        RESULTS_BUS[["Feature Results Bus"]]
+        AGGREGATOR[Results Aggregator]
+        API[Unified API]
+    end
+
+    %% Data flow
+    ZOOM --> AUDIO_ING & VIDEO_ING
+    MIC --> AUDIO_ING
+    CAM --> VIDEO_ING
+    TRANS --> TEXT_ING
+
+    AUDIO_ING & VIDEO_ING & TEXT_ING --> EVENT_BUS
+    EVENT_BUS --> SCHEMA
+
+    %% All features subscribe to the same event bus
+    EVENT_BUS --> FD0 & FD1 & FD2 & FD3 & FD3b & FD4
+    EVENT_BUS --> FD5 & FD6 & FD6b & FD7 & FD8
+    EVENT_BUS --> FD9 & FD10 & FDN
+
+    %% Features implement standard interface
+    FD0 & FD1 & FD2 & FD3 & FD3b & FD4 --> INTERFACE
+    FD5 & FD6 & FD6b & FD7 & FD8 --> INTERFACE
+    FD9 & FD10 & FDN --> INTERFACE
+
+    %% Detectors that feed psychometric overlay (per C05a)
+    FD1 & FD8 --> ENRICH
+    PROFILE_DB --> ENRICH
+    PROFILE_DB --> DRIFT
+
+    %% Results flow - features not in overlay go direct
+    FD0 & FD2 & FD3 & FD3b & FD4 --> RESULTS_BUS
+    FD5 & FD6 & FD6b & FD7 --> RESULTS_BUS
+    FD9 & FD10 & FDN --> RESULTS_BUS
+
+    %% Enriched outputs go to results bus
+    ENRICH --> RESULTS_BUS
+    DRIFT --> RESULTS_BUS
+
+    RESULTS_BUS --> AGGREGATOR --> API
+
+    style EVENT_BUS fill:#4a90e2,stroke:#2e5fa1,stroke-width:3px
+    style INTERFACE fill:#50c878,stroke:#3a9b5c,stroke-width:3px
+    style ENRICH fill:#50c878,stroke:#3a9b5c,stroke-width:2px
+    style DRIFT fill:#9b59b6,stroke:#7d3c98,stroke-width:2px
+    style PROFILE_DB fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px
+    style FD1 fill:#fff3cd,stroke:#856404,stroke-width:2px
+    style FD8 fill:#fff3cd,stroke:#856404,stroke-width:2px
+    style FD9 stroke-dasharray: 5 5
+    style FD10 stroke-dasharray: 5 5
+    style FDN stroke-dasharray: 5 5

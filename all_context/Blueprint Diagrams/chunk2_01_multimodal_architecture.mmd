@@ -1,0 +1,93 @@
+flowchart TB
+    subgraph "Input Modalities"
+        AUDIO[Audio Stream]
+        VIDEO[Video Stream]
+        TEXT[Transcription]
+        CONTEXT[Meeting Context]
+    end
+
+    subgraph "Feature Extraction"
+        subgraph "Audio Features"
+            VOL[Volume/Energy]
+            PITCH[Pitch Variation]
+            PAUSE[Pause Patterns]
+            CROSS[Cross-talk Detection]
+        end
+
+        subgraph "Video Features"
+            FACE[Facial Expression]
+            GAZE[Eye Gaze Direction]
+            MOUTH[Mouth Movement]
+            GESTURE[Hand Gestures]
+            HEAD[Head Orientation]
+        end
+
+        subgraph "Text Features"
+            SENT[Sentiment Analysis]
+            INTENT[Intent Classification]
+            TOPIC[Topic Coherence]
+            FILLER[Filler Words]
+        end
+
+        subgraph "Context Features"
+            ROLE[Participant Roles]
+            HISTORY[Speaking History]
+            CULTURE[Cultural Norms]
+            MEETING[Meeting Type]
+        end
+    end
+
+    subgraph "Detection Modules"
+        INT[Interruption Detector]
+        TONE[Tone Shift Detector]
+        DOM[Dominance Analyzer]
+        ENG[Engagement Scorer]
+    end
+
+    subgraph "Fusion Layer"
+        CONF[Confidence Scoring]
+        CORR[Cross-Modal Correlation]
+        VOTE[Weighted Voting]
+        THRESH[Adaptive Thresholds]
+    end
+
+    subgraph "Validation"
+        FP[False Positive Filter]
+        CONTEXT_VAL[Context Validator]
+        PATTERN[Pattern Matcher]
+    end
+
+    subgraph "Output"
+        FINAL[Validated Detections]
+        REPORT[Analytics Report]
+    end
+
+    %% Connections
+    AUDIO --> VOL & PITCH & PAUSE & CROSS
+    VIDEO --> FACE & GAZE & MOUTH & GESTURE & HEAD
+    TEXT --> SENT & INTENT & TOPIC & FILLER
+    CONTEXT --> ROLE & HISTORY & CULTURE & MEETING
+
+    VOL & PITCH & CROSS --> INT
+    FACE & GAZE & MOUTH --> INT
+    INTENT & FILLER --> INT
+
+    PITCH & PAUSE --> TONE
+    FACE & GESTURE --> TONE
+    SENT & TOPIC --> TONE
+
+    VOL & PAUSE --> DOM
+    GAZE & HEAD --> DOM
+    ROLE & HISTORY --> DOM
+
+    %% Fusion
+    INT & TONE & DOM & ENG --> CONF
+    CONF --> CORR
+    CORR --> VOTE
+    VOTE --> THRESH
+
+    %% Validation
+    THRESH --> FP
+    CONTEXT --> CONTEXT_VAL
+    FP & CONTEXT_VAL --> PATTERN
+    PATTERN --> FINAL & REPORT

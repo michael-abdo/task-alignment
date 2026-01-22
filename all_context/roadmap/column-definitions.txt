@@ -1,0 +1,299 @@
+ROADMAP COLUMN DEFINITIONS
+===========================
+Framework: Feature → Components (Product Architect)
+
+These definitions ensure:
+- Every decision remains understandable one year later
+- Every item exposes intent, boundaries, and ownership
+- Every structure tolerates team growth, refactors, and partial rewrites
+
+Context: "Required" means required for a complete roadmap row.
+Initial generation may leave PM-populated fields empty (Owner, Hours, Status, Dates).
+
+
+FEATURE-LEVEL COLUMNS (Parent)
+------------------------------
+
+Feature Name (Parent)
+  What it captures: The human-readable label identifying a Feature that delivers user-visible value.
+  Required: Yes
+  Constraint: Must describe an outcome, never a pipeline or abstraction.
+  Naming rule: Use invariant concepts; avoid technology-first or implementation-first names.
+  Valid examples: "Interruption Detector", "Live Streaming UI"
+  Invalid examples: "Redis Pipeline", "React Components"
+
+Feature ID (Parent)
+  What it captures: A unique, stable identifier for the Feature.
+  Required: Yes
+  Format: <DOMAIN>-F<##>
+  Format note: Supports F01-F99. If >99 Features needed in a domain, use F100+ (3 digits).
+  Valid examples: CORE-F01, PLAT-F05, PSYC-F02
+  Constraint: Must survive renames; never reuse retired IDs.
+  Retired ID tracking: Retired IDs tracked in Notes of last Component row: "Retired: YYYY-MM-DD".
+  Last row defined: Last = highest Component # (e.g., C07 for Components C01-C07).
+
+Feature Domain (Parent)
+  What it captures: The categorical grouping indicating the Feature's area of concern.
+  Required: Yes
+  Allowed values (exhaustive):
+    CORE - Core analytics and detection logic
+    PLAT - Platform infrastructure, UI, and integrations
+    PSYC - Psychometric instruments and assessments
+    CTXT - Contextual adaptation and thresholds
+    VALD - Validation, QA, and production readiness
+    POST - Post-meeting synthesis and reporting
+  Constraint: Every Feature must belong to exactly one domain.
+
+Feature Owner(s)
+  What it captures: The person(s) accountable for the Feature as a whole.
+  Required: Yes
+  Location: Dedicated column at Feature level.
+  Constraint: Features may have multiple owners. Components may not.
+
+
+COMPONENT-LEVEL COLUMNS
+-----------------------
+
+Component Name
+  What it captures: The label for an atomic, independently buildable unit within a Feature.
+  Required: Yes
+  Constraint: Each Component owns exactly one responsibility.
+  Replacement test: Removing or swapping this Component must not break sibling Components.
+  Break defined: Causes compile error, runtime exception, or test failure in sibling Component.
+  Reserved value: "COMPONENTS TO BE PROVIDED" signals a placeholder awaiting decomposition.
+  Reserved value rule: Placeholders must have Status = "In Progress" until decomposed.
+  Placeholder BLOCKER rule: Placeholders must have empty BLOCKER field. Dependencies on other Components apply after decomposition.
+  Placeholder Success Criteria: "Decomposed into concrete Components with assigned Owners."
+  Decomposition rule: Decomposition occurs when Owner replaces placeholder with concrete Component Names. Original row deleted; new rows inherit Feature ID.
+
+Signals
+  What it captures: The output event or data structure this Component produces.
+  Required: Yes (empty permitted during Notes migration period)
+  Format: <EventName>: <field1> + <field2> + <field3>
+  Valid example: "InterruptionEvent: type + speakers + confidence"
+  Constraint: Downstream consumers depend on this contract; changes require versioning.
+  Versioning rule: Version tracked in Signals field as suffix: EventName_v2: field1 + field2. Breaking changes increment version.
+  Version format: Initial version = EventName (no suffix). First breaking change = EventName_v2.
+  Breaking change defined: Removing field, renaming field, or changing field type. Non-breaking = adding new field.
+  Temporary rule: Signal data currently stored in Notes column until migration complete.
+
+Owner
+  What it captures: The single person or role accountable for this Component.
+  Required: Yes
+  Constraint: Exactly one owner per Component. "TBD" permitted as temporary placeholder.
+  TBD rule: TBD must resolve before Status transitions to Done; verification cannot proceed with Owner = TBD. Maximum duration: 30 days from row creation.
+  30 day enforcement: After 30 days, escalate to Feature Owner for resolution or documented exception.
+  Documented exception format: Recorded in Notes: "TBD Exception: <reason> - Approved by <Feature Owner> on YYYY-MM-DD".
+  Row creation date: Start Date for concrete Components. For placeholders with TBD owner, creation date tracked in Notes as "Created: YYYY-MM-DD".
+  Note: Features may have multiple owners; Components may not.
+  Valid examples: "Patrick", "Youssef", "Mike", "TBD"
+  Invalid examples: "Patrick + Youssef", "Team", "Everyone"
+
+Component Type
+  What it captures: The technical layer classification of the Component.
+  Required: Yes (empty for placeholders)
+  Allowed values (exhaustive):
+    BACK - Business logic and data processing
+    FRONT - Frontend UI, visualization, user interaction
+    INFRA - Deployment, hosting, external service connectors
+    INTGR - Orchestration across multiple BACK/FRONT/INFRA components
+  Constraint: Every Component must have exactly one type.
+  Boundary clarification:
+    - Database query service → BACK (business logic)
+    - AWS deployment config → INFRA (hosting)
+    - Hume API connector → INFRA (external service connector)
+    - Pipeline coordinating BACK + INFRA → INTGR (orchestration)
+  INFRA vs INTGR rule: INFRA = single external service connection. INTGR = coordinates 2+ Components or services into unified flow.
+
+Component #
+  What it captures: The sequence number of this Component within its parent Feature.
+  Required: Yes (empty for placeholders)
+  Format: C<##>
+  Valid examples: C01, C02, C03
+  Placeholder rule: Placeholders have Component # = empty. Component ID for placeholders = "<Feature ID> |" (no C## suffix).
+  Constraint: Represents execution order within the Feature.
+  Execution order defined: Recommended implementation sequence. C01 must complete before C02 begins.
+  Execution vs Dependencies: Execution order applies to functional implementation. Design/scaffolding on C02 may proceed while C01 in progress if C01 listed in Dependencies (not BLOCKER).
+  Gap rule: Gaps indicate deleted Components. No execution step skipped; remaining Components execute in sequence.
+
+Component ID
+  What it captures: The globally unique identifier combining Feature ID and Component number.
+  Required: Yes
+  Format: <Feature ID> | C<##>
+  Valid examples: "PLAT-F01 | C01", "CORE-F05 | C02"
+  Constraint: Must remain stable; never reuse after deletion.
+
+
+DEPENDENCY COLUMNS
+------------------
+
+BLOCKER (component ID)
+  What it captures: Component ID(s) that must reach "Done" before this Component can start.
+  Required: Yes (empty permitted)
+  Semantics: Hard blocker — no work of any kind can begin until blocker reaches "Done".
+  Work defined: Includes planning, estimation, design, and implementation. All prohibited until BLOCKER resolves.
+  Format: Single Component ID or comma-separated list.
+  Empty value meaning: No hard blockers exist.
+  Distinction from Dependencies: BLOCKER prevents all work; Dependencies allow parallel work.
+
+Dependencies (Component IDs)
+  What it captures: Component ID(s) whose outputs this Component consumes.
+  Required: Yes (empty permitted)
+  Semantics: Soft dependency — design and scaffolding may proceed in parallel; functional integration and testing require the dependency output.
+  Design and scaffolding defined: Design = architecture docs, interface definitions, type signatures. Scaffolding = file structure, stub functions, test harnesses. Excludes: functional implementation, integration code.
+  Format: Single Component ID or comma-separated list.
+  Valid examples: "INFRA-S04-C02", "FRONTEND-S01-C01, INFRA-S03-C02"
+  Empty value meaning: No dependencies exist.
+  Distinction from BLOCKER: Dependencies allow parallel work; BLOCKER prevents all work.
+
+
+PROJECT MANAGEMENT COLUMNS
+--------------------------
+
+Parent Item for Monday.com
+  What it captures: A formatted string for import into Monday.com.
+  Required: Yes
+  Format: <Feature ID> / <Feature Name>
+  Valid example: "CORE-F01 / Interruption Detector"
+  Constraint: Auto-generated from Feature ID and Feature Name; manual edits prohibited.
+  Enforcement: Honor system. If mismatch detected during review, correct to match formula.
+  Review defined: Weekly roadmap sync or PR review touching the CSV.
+
+Success Criteria
+  What it captures: The observable, testable outcome indicating Component completion.
+  Required: Yes
+  Framework: SMART goals - Specific, Measurable, Achievable, Relevant, Time-bound (where applicable).
+
+  Format: <human-readable outcome> (<tracking metric>)
+
+  Principles:
+  - Abstract enough for non-technical users to validate
+  - Metrics in parentheses provide tracking targets, not hard pass/fail thresholds
+  - Metrics should be loose/achievable, not aspirational or cutting-edge
+  - Focus on "right thing tracked" over "perfect number hit"
+
+  Valid examples:
+  - "UI feels responsive during playback (sub 200ms interaction delay)"
+  - "Video plays smoothly without stuttering (≥24 FPS sustained)"
+  - "Search results appear quickly (sub 500ms for typical queries)"
+  - "User can complete upload without errors (≥95% success rate)"
+  - "Dashboard loads without noticeable delay (sub 2s initial render)"
+
+  Invalid examples:
+  - "Works well" (no observable outcome, no metric)
+  - "Video H.264 @30FPS" (technical spec, not user-testable outcome)
+  - "Sub 50ms p99 latency" (metric-only, no human context)
+  - "Fast enough" (subjective, no metric)
+  - "REST endpoint returns 200" (implementation detail, not outcome)
+
+Hours Est
+  What it captures: The estimated effort in hours to complete this Component.
+  Required: Yes
+  Constraint: Represents planning input, not commitment or deadline.
+
+Hours Actual
+  What it captures: The actual hours spent on this Component.
+  Required: Yes (0 permitted for Status = Not Started)
+  Constraint: Updated after work completes or pauses.
+  Pause defined: Work stoppage exceeding 1 business day. Update Hours Actual at each pause.
+  Business day defined: Monday-Friday excluding company holidays. Friday 5pm to Monday 9am = 0 business days.
+  Company holidays defined: Holidays observed by Component Owner's location.
+
+Status
+  What it captures: The current state of the Component.
+  Required: Yes
+  Allowed values (exhaustive):
+    Not Started - No work has begun
+    In Progress - Active work underway
+    Done - Success Criteria met and verified
+  Constraint: "Done" requires Success Criteria verification; self-declaration insufficient.
+  Verification rule: Verification requires (a) Owner confirms Success Criteria met, AND (b) one other team member confirms via any one of: code review, demo, or test run.
+  Single-person team rule: If team has 1 person, verification requires documented self-review checklist OR external stakeholder sign-off.
+  External stakeholder defined: Anyone outside the immediate development team: product manager, customer, QA lead, or engineer from another team.
+  Self-review checklist: (a) Success Criteria met, (b) No regressions, (c) Documentation updated.
+
+Start Date
+  What it captures: The date when work on this Component began.
+  Required: Yes (empty permitted for Status = Not Started)
+  Format: YYYY-MM-DD
+  Population rule: Populated when Status transitions to In Progress.
+
+End Date
+  What it captures: The target completion date for this Component.
+  Required: Yes (empty permitted for Status = Not Started without planning target)
+  Format: YYYY-MM-DD
+  Constraint: Represents a planning target, not a hard deadline.
+
+Completion Date
+  What it captures: The actual date when the Component achieved "Done" status.
+  Required: Yes (empty permitted for Status ≠ Done)
+  Format: YYYY-MM-DD
+  Constraint: Populated only when Status = "Done". Reset to empty if Status reverts from "Done".
+
+
+DOCUMENTATION COLUMNS
+---------------------
+
+Notes
+  What it captures: Free-form text preserving context, decisions, or implementation details.
+  Required: Yes
+  Constraint: Must explain WHY and WHAT; avoid HOW unless architecturally significant.
+  Valid example: "Hume prosody windowing + derived metrics (valence, arousal, tension_index)"
+  Invalid example: "See code"
+  Temporary rule: Currently also stores Signal data until migration complete.
+
+Risk Level
+  What it captures: Assessment of replacement complexity and coupling exposure.
+  Required: Yes
+  Allowed values (exhaustive):
+    Low - Minimal coupling; replacement requires < 1 day effort
+    Medium - Moderate coupling; replacement requires 1-5 days effort
+    High - Significant coupling; replacement requires > 5 days effort or architectural changes
+  Measurement baseline: Days measured against median team member skill level. When uncertain, round up.
+  Median defined: Mid-level engineer with 2-3 years experience on this codebase.
+  New codebase rule: For codebases < 2 years old, median = engineer with experience on majority of existing codebase.
+
+
+DEPENDENCY ID FORMAT REFERENCE
+------------------------------
+Two valid ID formats exist:
+
+1. Component ID format: <Feature ID> | C<##>
+   Used for: New Component identification
+   Examples: "PLAT-F01 | C01", "CORE-F05 | C02"
+
+2. Dependency ID format: <PREFIX>-S<##>-C<##>
+   S defined: S = Section (legacy grouping). S## represents subsystem number within the prefix domain.
+   Used for: Cross-references in BLOCKER and Dependencies columns
+   Valid prefixes:
+     INFRA-Sxx-Cxx    (Infrastructure components)
+     FRONTEND-Sxx-Cxx (Frontend components)
+     ANALYTICS-Sxx-Cxx (Analytics components)
+     CONTEXT-Sxx-Cxx  (Context components)
+     PSYCH-Sxx-Cxx    (Psychometric components)
+     QA-Sxx-Cxx       (Validation components)
+
+Both formats valid in BLOCKER and Dependencies columns.
+
+
+PLACEHOLDER FIELD REQUIREMENTS
+------------------------------
+When Component Name = "COMPONENTS TO BE PROVIDED":
+
+  Component #:        Empty
+  Component ID:       <Feature ID> | (no C## suffix)
+  Signals:            Empty
+  Component Type:     Empty
+  Owner:              Required (person responsible for decomposition)
+  Hours Est:          Estimate for decomposition effort
+  Hours Actual:       0 until decomposition begins
+  Decomposition begins: First concrete Component row created for the Feature.
+  Status:             "In Progress"
+  Start Date:         Date decomposition analysis began (may precede first concrete row creation)
+  End Date:           Target date for decomposition completion
+  Completion Date:    Empty (until decomposed)
+  Success Criteria:   "Decomposed into concrete Components with assigned Owners."
+  Risk Level:         Assessment of decomposition complexity
+  BLOCKER:            Empty (required)
+  Dependencies:       Empty (dependencies apply after decomposition)
+  Notes:              Must include "Created: YYYY-MM-DD" if Owner = TBD

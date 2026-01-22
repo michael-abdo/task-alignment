@@ -1,0 +1,112 @@
+flowchart TB
+    subgraph "User Identity Infrastructure (PSYC-F00)"
+        USERS[(Users Table<br/>Cognito Sync)]
+        PROFILES[(User Profiles)]
+        MATCH[Participant-User<br/>Email Matching]
+    end
+
+    subgraph "Feature Detection Layer"
+        INT[interruption_detector]
+        SENT[sentiment_detector]
+    end
+
+    subgraph "Psychometric Profile Layer"
+        subgraph "Core Baseline (6 min) - PSYC-F01"
+            CAL[Overconfidence<br/>Calibration<br/>cal_gap, brier]
+            DEC[Decision Pressure<br/>Trait<br/>decision_pressure_trait_pct]
+            AUTH_PS[Authority Deference<br/>Post-Senior<br/>authority_deference_post_senior_pct]
+        end
+
+        subgraph "Advanced Add-On (4 min) - PSYC-F02"
+            PSY[Psych Safety<br/>Trait<br/>psych_safety_trait_pct]
+            AUTH_SC[Authority Deference<br/>Self-Censor<br/>authority_deference_self_censor_pct]
+        end
+
+        subgraph "Meeting Pulse (1 min, per-meeting) - PSYC-F03"
+            MOOD[Mood State<br/>PCTX_MOOD_001]
+            STRESS_S[Stress State<br/>PCTX_STRESS_001]
+            EFFORT[Effort State<br/>PCTX_EFFORT_001]
+            DISSENT[Dissent Safety State<br/>PSD_014<br/>psych_safety_state_pct]
+            TIME[Time Pressure State<br/>DCTP_013<br/>time_pressure_state_pct]
+            DELAY[Room to Delay State<br/>DCTP_016<br/>room_to_delay_state_pct]
+        end
+
+        PROFILE_DB[(Profile Store<br/>PostgreSQL)]
+    end
+
+    subgraph "Profile Overlay Engine (PSYC-F04 | C02)"
+        ENRICH[["Context Enrichment<br/>─────────────────<br/>• Appends Core traits only:<br/>  decision_pressure_trait_pct<br/>  authority_deference_post_senior_pct<br/>  cal_gap<br/>• Omits trait data when QC flag = true<br/>• Probabilistic language only"]]
+    end
+
+    subgraph "State vs Trait Drift Detection (PSYC-F03 | C04)"
+        DRIFT[["Drift Detection<br/>─────────────────<br/>• psych_safety_state_pct vs<br/>  psych_safety_trait_pct<br/>• time_pressure_state_pct vs<br/>  decision_pressure_trait_pct<br/>• drift_flag if |delta| > 20 pts"]]
+    end
+
+    subgraph "Enriched Output"
+        subgraph "Example: Interruption Event"
+            RAW["InterruptionEvent<br/>speaker: Alice<br/>count: 5<br/>type: competitive"]
+            CONTEXT["+ Profile Context<br/>─────────────────<br/>Alice: 82nd %ile authority<br/>deference → pattern may indicate<br/>strong conviction overriding<br/>usual behavior"]
+        end
+
+        API[Unified API]
+        SUMMARY[Post-Meeting Summary]
+    end
+
+    %% User Identity flows to Profile DB (PSYC-F00 is foundation)
+    USERS --> PROFILE_DB
+    PROFILES --> PROFILE_DB
+    MATCH --> ENRICH
+
+    %% Detection outputs flow to enrichment (PSYC-F04 | C02)
+    INT & SENT --> ENRICH
+
+    %% All profile data stored in Profile DB
+    CAL & DEC & AUTH_PS --> PROFILE_DB
+    PSY & AUTH_SC --> PROFILE_DB
+    MOOD & STRESS_S & EFFORT & DISSENT & TIME & DELAY --> PROFILE_DB
+
+    %% Core Baseline traits feed overlay (PSYC-F04 | C02)
+    CAL & DEC & AUTH_PS --> ENRICH
+
+    %% State + Advanced traits feed drift detection (PSYC-F03 | C04)
+    DISSENT & TIME --> DRIFT
+    PSY --> DRIFT
+    DEC --> DRIFT
+
+    %% Enriched output
+    ENRICH --> RAW
+    RAW --> CONTEXT
+    DRIFT --> CONTEXT
+    CONTEXT --> API & SUMMARY
+
+    %% Styling
+    style ENRICH fill:#50c878,stroke:#3a9b5c,stroke-width:3px
+    style DRIFT fill:#9b59b6,stroke:#7d3c98,stroke-width:2px
+    style PROFILE_DB fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px
+    style CONTEXT fill:#f5a623,stroke:#c98400,stroke-width:2px
+
+    %% Detector boxes
+    style INT fill:#fff3cd,stroke:#856404
+    style SENT fill:#fff3cd,stroke:#856404
+
+    %% Core Baseline boxes
+    style CAL fill:#e8f4fd,stroke:#4a90e2
+    style DEC fill:#e8f4fd,stroke:#4a90e2
+    style AUTH_PS fill:#e8f4fd,stroke:#4a90e2
+
+    %% Advanced Add-On boxes
+    style PSY fill:#d4edda,stroke:#28a745
+    style AUTH_SC fill:#d4edda,stroke:#28a745
+
+    %% State boxes
+    style MOOD fill:#fef3e2,stroke:#f5a623
+    style STRESS_S fill:#fef3e2,stroke:#f5a623
+    style EFFORT fill:#fef3e2,stroke:#f5a623
+    style TIME fill:#fef3e2,stroke:#f5a623
+    style DELAY fill:#fef3e2,stroke:#f5a623
+    style DISSENT fill:#fef3e2,stroke:#f5a623
+
+    %% User Identity boxes (PSYC-F00)
+    style USERS fill:#ffcccb,stroke:#dc3545,stroke-width:2px
+    style PROFILES fill:#ffcccb,stroke:#dc3545
+    style MATCH fill:#ffcccb,stroke:#dc3545

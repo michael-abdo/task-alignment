@@ -1,0 +1,88 @@
+flowchart TB
+    subgraph "Single Event Stream - Multiple Features"
+        EVENT[["Unified Multi-Modal Event<br/>t=1234567"]]
+        
+        subgraph "Parallel Feature Processing"
+            subgraph "Conversation Features"
+                F1[interruption_detector]
+                F2[tone_shift_detector]
+                F3[dominance_analyzer]
+                F4[turn_taking]
+                F4b[talk_time_analytics]
+                F4c[role_dynamics_analyzer]
+            end
+
+            subgraph "Cognitive Features"
+                F5[Anchoring Bias]
+                F6[Confirmation Bias]
+                F6b[Groupthink]
+                F7[Cognitive Load]
+                F8[Attention Level]
+            end
+            
+            subgraph "Emotional Features"
+                F9[empathy_detector]
+                F10[frustration_detector]
+                F11[engagement_scorer]
+                F12[stress_detector]
+                F12b[sentiment_detector]
+            end
+            
+            subgraph "Behavioral Features"
+                F13[Active Listening]
+                F14[Mirroring]
+                F15[Defensiveness]
+                F16[Openness]
+            end
+            
+            subgraph "Add New Features"
+                F17[New Feature A]
+                F18[New Feature B]
+                FN[... Feature N →∞]
+            end
+        end
+    end
+
+    subgraph "Scaling Growth"
+        BEFORE[8 Features<br/>Running]
+        AFTER[24 Features<br/>Running]
+        FUTURE[∞ Features<br/>Possible]
+    end
+
+    subgraph "How to Add New Feature"
+        STEP1[Implement IFeatureDetector]
+        STEP2[Deploy Container/Service]
+        STEP3[Auto-subscribes to Event Bus]
+        STEP4[Starts Processing]
+    end
+
+    subgraph "Resource Scaling"
+        subgraph "Per-Feature Scaling"
+            RS1[interruption_detector<br/>3 instances]
+            RS2[cognitive_load_monitor<br/>5 instances]
+            RS3[tone_shift_detector<br/>2 instances]
+            RSN[Each scales<br/>independently]
+        end
+    end
+
+    %% All features receive same event
+    EVENT --> F1 & F2 & F3 & F4 & F4b & F4c
+    EVENT --> F5 & F6 & F6b & F7 & F8
+    EVENT --> F9 & F10 & F11 & F12 & F12b
+    EVENT --> F13 & F14 & F15 & F16
+    EVENT --> F17 & F18 & FN
+
+    %% Scaling flow
+    BEFORE --> AFTER --> FUTURE
+    STEP1 --> STEP2 --> STEP3 --> STEP4
+
+    %% Feature scaling
+    F1 -.-> RS1
+    F7 -.-> RS2
+    F2 -.-> RS3
+
+    style EVENT fill:#4a90e2,stroke:#2e5fa1,stroke-width:4px
+    style F17 stroke-dasharray: 5 5,fill:#e8f5e9
+    style F18 stroke-dasharray: 5 5,fill:#e8f5e9
+    style FN stroke-dasharray: 5 5,fill:#e8f5e9
+    style FUTURE fill:#50c878,stroke:#3a9b5c,stroke-width:3px

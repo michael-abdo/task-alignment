@@ -1,0 +1,50 @@
+flowchart LR
+    subgraph "Initial Detection"
+        OVERLAP[Speech Overlap<br/>Detected]
+    end
+
+    subgraph "Audio Validation"
+        AUDIO_VOL[Volume Check]
+        AUDIO_PITCH[Pitch Analysis]
+        AUDIO_TIMING[Timing Analysis]
+    end
+
+    subgraph "Video Validation"
+        VIDEO_MOUTH[Mouth Open?]
+        VIDEO_GAZE[Looking at Speaker?]
+        VIDEO_GESTURE[Interrupting Gesture?]
+    end
+
+    subgraph "Context Validation"
+        CTX_PATTERN[Speaking Pattern]
+        CTX_CULTURE[Cultural Norms]
+        CTX_ROLE[Role Dynamics]
+    end
+
+    subgraph "Classification"
+        SUPPORT[Supportive<br/>Back-channel]
+        COLLAB[Collaborative<br/>Building]
+        COMPET[Competitive<br/>Interruption]
+        FALSE[False Positive]
+    end
+
+    OVERLAP --> AUDIO_VOL & VIDEO_MOUTH & CTX_PATTERN
+    
+    AUDIO_VOL -->|Low| SUPPORT
+    AUDIO_VOL -->|High| AUDIO_PITCH
+    
+    AUDIO_PITCH -->|Agreement tone| SUPPORT
+    AUDIO_PITCH -->|Disagreement| COMPET
+    
+    VIDEO_MOUTH -->|Closed| FALSE
+    VIDEO_MOUTH -->|Open| VIDEO_GAZE
+    
+    VIDEO_GAZE -->|Away| FALSE
+    VIDEO_GAZE -->|At speaker| VIDEO_GESTURE
+    
+    VIDEO_GESTURE -->|Affirming| COLLAB
+    VIDEO_GESTURE -->|Assertive| COMPET
+    
+    CTX_PATTERN -->|Turn-taking| COLLAB
+    CTX_CULTURE -->|High-context| SUPPORT
+    CTX_ROLE -->|Subordinate| FALSE

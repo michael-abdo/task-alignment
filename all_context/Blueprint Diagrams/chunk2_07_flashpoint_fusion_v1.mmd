@@ -1,0 +1,73 @@
+%% Flashpoint Detector: Initial Fusion Layer Implementation (PRs 55/56)
+%% This shows CURRENT STATE after Hume integration, not end-state vision
+
+flowchart TB
+    subgraph "Data Sources"
+        ZOOM[Zoom RTMS]
+        TRANS[Transcription Service]
+    end
+
+    subgraph "Signal Extraction Layer"
+        subgraph "Hume AI Services (NEW - PRs 55/56)"
+            HUME_AUDIO[HumeAudioService<br/>───────────────<br/>• valence<br/>• arousal<br/>• tension_index<br/>• drift<br/>• volatility]
+            HUME_FACE[HumeFaceService<br/>───────────────<br/>• positive_engagement<br/>• distress_concern]
+        end
+
+        subgraph "Transcript Processing (Existing)"
+            TRANSCRIPT[Transcript Parser<br/>───────────────<br/>• turn timing<br/>• speaker ID<br/>• text content]
+        end
+    end
+
+    subgraph "Detection Layer"
+        subgraph "Text-Based Detectors (Existing)"
+            INT[interruption_detector<br/>───────────────<br/>Input: Transcript timing<br/>Method: 400ms overlap<br/>Output: interruption events]
+            TONE[tone_shift_detector<br/>───────────────<br/>Input: Transcript text<br/>Method: Claude API<br/>Output: tone change events]
+            DOM[dominance_analyzer<br/>───────────────<br/>Input: Speaking stats<br/>Method: 50% threshold<br/>Output: dominance alerts]
+        end
+    end
+
+    subgraph "Fusion Layer v0.1 (NEW - PR 56)"
+        FLASH[["Flashpoint Detector<br/>═══════════════════════<br/>Inputs:<br/>  • hume_audio_tension_index<br/>  • hume_face_distress_concern<br/>───────────────────────<br/>Logic:<br/>  • Both > 0.35 threshold<br/>  • Within 7 sec window<br/>  • 20 sec cooldown<br/>───────────────────────<br/>Output:<br/>  • timeline_event kind=flashpoint"]]
+    end
+
+    subgraph "Output Layer"
+        REDIS[(Redis<br/>───────<br/>• Metrics cache<br/>• Time-series<br/>• Pub/sub)]
+        TIMELINE[Timeline Events]
+        ALERTS[Bias Alerts]
+    end
+
+    subgraph "API Layer"
+        API_HUME["/api/analytics/.../hume-audio<br/>/api/analytics/.../hume-face"]
+        API_EXIST[Existing Analytics API]
+    end
+
+    %% Data flow
+    ZOOM -->|Audio stream| HUME_AUDIO
+    ZOOM -->|Video frames| HUME_FACE
+    ZOOM -->|Audio| TRANS
+    TRANS --> TRANSCRIPT
+
+    TRANSCRIPT --> INT & TONE & DOM
+
+    %% Hume signals to Flashpoint
+    HUME_AUDIO -->|tension_index| FLASH
+    HUME_FACE -->|distress_concern| FLASH
+
+    %% Outputs
+    HUME_AUDIO -->|metrics| REDIS
+    HUME_FACE -->|metrics| REDIS
+    INT --> ALERTS
+    TONE --> TIMELINE
+    DOM --> ALERTS
+    FLASH -->|flashpoint| TIMELINE
+
+    REDIS --> API_HUME
+    REDIS --> API_EXIST
+
+    %% Styling
+    style FLASH fill:#50c878,stroke:#2e8b57,stroke-width:3px
+    style HUME_AUDIO fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px
+    style HUME_FACE fill:#4a90e2,stroke:#2e5fa1,stroke-width:2px
+    style INT fill:#fff3cd,stroke:#856404,stroke-width:2px
+    style TONE fill:#fff3cd,stroke:#856404,stroke-width:2px
+    style DOM fill:#fff3cd,stroke:#856404,stroke-width:2px

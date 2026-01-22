@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph "Modality-Focused Architecture"
+        subgraph "Audio Pipeline"
+            A_SRC[Audio Source]
+            A_PROC[Audio Processor]
+            A_INT[Interruption Logic]
+            A_TONE[Tone Analysis]
+        end
+        
+        subgraph "Video Pipeline"
+            V_SRC[Video Source]
+            V_PROC[Video Processor]
+            V_EMO[Emotion Detection]
+            V_GAZE[Gaze Tracking]
+        end
+        
+        subgraph "Text Pipeline"
+            T_SRC[Text Source]
+            T_PROC[Text Processor]
+            T_SENT[Sentiment]
+            T_TOPIC[Topic Analysis]
+        end
+        
+        subgraph "Complex Integration"
+            MERGE[Merge Results<br/>Complex Logic]
+        end
+    end
+
+    %% Architecture flow
+    A_SRC --> A_PROC --> A_INT & A_TONE
+    V_SRC --> V_PROC --> V_EMO & V_GAZE
+    T_SRC --> T_PROC --> T_SENT & T_TOPIC
+    A_INT & A_TONE & V_EMO & V_GAZE & T_SENT & T_TOPIC --> MERGE
+
+    style MERGE fill:#ff6b6b,stroke:#ff0000,stroke-width:2px

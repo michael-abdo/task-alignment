@@ -1,0 +1,74 @@
+%% NOTE: This shows END-STATE multi-modal plugin vision
+%% Current interruption_detector (Completed) uses Audio only
+%% Video integration planned for future enhancement
+
+flowchart LR
+    subgraph "Feature Plugin Architecture"
+        subgraph "Plugin Interface"
+            PI[["IFeatureDetector<br/>━━━━━━━━━━━━<br/>+ subscribe()<br/>+ process(event)<br/>+ getConfidence()<br/>+ publish(result)"]]
+        end
+
+        subgraph "Example: interruption_detector Plugin"
+            subgraph "Multi-Modal Access"
+                MA1[Audio Features<br/>• Volume levels<br/>• Voice overlap<br/>• Pitch changes]
+                MA2[Video Features<br/>• Mouth movement<br/>• Gaze direction<br/>• Body language]
+                MA3[Text Features<br/>• Sentence completion<br/>• Turn-taking patterns<br/>• Conversation flow]
+            end
+
+            subgraph "Detection Logic"
+                DL[Cross-Modal<br/>Validation Engine]
+                CONF[Confidence<br/>Calculator]
+                ML[ML Model<br/>Optional]
+            end
+
+            subgraph "Output"
+                OUT[Interruption Event<br/>• Type: Supportive/Competitive<br/>• Confidence: 0.95<br/>• Participants: A to B<br/>• Timestamp: 1234567<br/>• Evidence: details]
+            end
+        end
+
+        subgraph "Plugin Lifecycle"
+            INIT[Initialize]
+            REG[Register with Bus]
+            SUB[Subscribe to Events]
+            PROC[Process Events]
+            PUB[Publish Results]
+        end
+
+        subgraph "Scaling Properties"
+            SP1[Independent Deployment]
+            SP2[Horizontal Scaling]
+            SP3[Resource Isolation]
+            SP4[Version Management]
+        end
+    end
+
+    subgraph "Event Flow"
+        EVENT[["Incoming Event<br/>━━━━━━━━━<br/>timestamp: 1234567<br/>participant: 'A'<br/>audio: data<br/>video: data<br/>text: data"]]
+    end
+
+    subgraph "Results"
+        RESULT[["Feature Result<br/>━━━━━━━━━<br/>feature: 'interruption'<br/>detection: data<br/>confidence: 0.95<br/>metadata: data"]]
+    end
+
+    %% Flow
+    EVENT --> MA1 & MA2 & MA3
+    MA1 & MA2 & MA3 --> DL
+    DL --> CONF
+    CONF --> ML
+    ML --> OUT
+    OUT --> RESULT
+
+    %% Lifecycle
+    INIT --> REG --> SUB --> PROC --> PUB
+    
+    %% Interface implementation
+    PI -.-> INIT
+    PI -.-> PROC
+    PI -.-> PUB
+
+    %% Scaling
+    SP1 & SP2 & SP3 & SP4 -.-> PI
+
+    style PI fill:#50c878,stroke:#3a9b5c,stroke-width:3px
+    style EVENT fill:#4a90e2,stroke:#2e5fa1,stroke-width:3px
+    style RESULT fill:#f39c12,stroke:#d68910,stroke-width:3px
