@@ -501,6 +501,183 @@ class OutlookEmailDownloader:
         return response.ok
 
     # =========================================================================
+    # MAIL FOLDER METHODS
+    # =========================================================================
+
+    def list_mail_folders(self) -> List[Dict]:
+        """
+        List all mail folders in the mailbox.
+
+        Returns:
+            List of folder info dicts with id, displayName, totalItemCount, unreadItemCount
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+        url = f"{self.graph_endpoint}/{user_path}/mailFolders"
+        params = {
+            "$select": "id,displayName,totalItemCount,unreadItemCount,parentFolderId",
+            "$top": 100
+        }
+
+        response = requests.get(url, headers=self._get_headers(), params=params)
+
+        if not response.ok:
+            raise RuntimeError(f"Error listing folders: {response.status_code} - {response.text}")
+
+        return response.json().get("value", [])
+
+    def get_folder_by_name(self, folder_name: str) -> Optional[Dict]:
+        """
+        Get a mail folder by its display name.
+
+        Args:
+            folder_name: The folder display name (e.g., "Archive", "Inbox", "Sent Items")
+
+        Returns:
+            Folder info dict or None if not found
+        """
+        folders = self.list_mail_folders()
+        for folder in folders:
+            if folder.get("displayName", "").lower() == folder_name.lower():
+                return folder
+        return None
+
+    def fetch_emails_from_folder(
+        self,
+        folder: str = "Inbox",
+        start_date: datetime = None,
+        end_date: datetime = None,
+        limit: int = 100,
+        download_attachments: bool = False
+    ) -> List[Email]:
+        """
+        Fetch emails from a specific folder or all folders.
+
+        Args:
+            folder: Folder name ("Inbox", "Archive", "SentItems", "Drafts", "DeletedItems")
+                   or "All" to search all folders
+            start_date: Optional start date filter
+            end_date: Optional end date filter
+            limit: Maximum number of emails to return
+            download_attachments: Whether to download attachment content
+
+        Returns:
+            List of Email objects
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+
+        # Build URL based on folder
+        if folder.lower() == "all":
+            # Search all folders
+            url = f"{self.graph_endpoint}/{user_path}/messages"
+        else:
+            # Map common folder names
+            folder_map = {
+                "inbox": "Inbox",
+                "archive": "Archive",
+                "sent": "SentItems",
+                "sentitems": "SentItems",
+                "sent items": "SentItems",
+                "drafts": "Drafts",
+                "deleted": "DeletedItems",
+                "deleteditems": "DeletedItems",
+                "deleted items": "DeletedItems",
+                "junk": "JunkEmail",
+                "junkemail": "JunkEmail",
+                "junk email": "JunkEmail",
+            }
+            folder_id = folder_map.get(folder.lower(), folder)
+            url = f"{self.graph_endpoint}/{user_path}/mailFolders/{folder_id}/messages"
+
+        # Build filter
+        filters = []
+        if start_date:
+            start_str = start_date.strftime("%Y-%m-%dT00:00:00Z")
+            filters.append(f"receivedDateTime ge {start_str}")
+        if end_date:
+            end_str = end_date.strftime("%Y-%m-%dT23:59:59Z")
+            filters.append(f"receivedDateTime le {end_str}")
+
+        params = {
+            "$select": "id,subject,body,receivedDateTime,sentDateTime,from,toRecipients,hasAttachments,conversationId,isRead,parentFolderId",
+            "$orderby": "receivedDateTime desc",
+            "$top": limit
+        }
+
+        if filters:
+            params["$filter"] = " and ".join(filters)
+
+        response = requests.get(url, headers=self._get_headers(), params=params)
+
+        if not response.ok:
+            raise RuntimeError(f"Error fetching emails: {response.status_code} - {response.text}")
+
+        data = response.json()
+        emails = []
+        for email_data in data.get("value", []):
+            emails.append(self._parse_email(email_data, download_attachments))
+
+        return emails
+
+    def search_emails(
+        self,
+        query: str,
+        folder: str = "All",
+        limit: int = 50
+    ) -> List[Email]:
+        """
+        Search emails using Microsoft Search.
+
+        Args:
+            query: Search query (searches subject, body, sender, etc.)
+            folder: Folder to search ("All" for all folders)
+            limit: Maximum number of results
+
+        Returns:
+            List of matching Email objects
+        """
+        if not self.token:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
+
+        # Build URL
+        if folder.lower() == "all":
+            url = f"{self.graph_endpoint}/{user_path}/messages"
+        else:
+            folder_map = {
+                "inbox": "Inbox",
+                "archive": "Archive",
+                "sent": "SentItems",
+                "sentitems": "SentItems",
+            }
+            folder_id = folder_map.get(folder.lower(), folder)
+            url = f"{self.graph_endpoint}/{user_path}/mailFolders/{folder_id}/messages"
+
+        params = {
+            "$search": f'"{query}"',
+            "$select": "id,subject,body,receivedDateTime,from,toRecipients,hasAttachments,conversationId,parentFolderId",
+            "$top": limit
+        }
+
+        response = requests.get(url, headers=self._get_headers(), params=params)
+
+        if not response.ok:
+            raise RuntimeError(f"Error searching emails: {response.status_code} - {response.text}")
+
+        data = response.json()
+        emails = []
+        for email_data in data.get("value", []):
+            emails.append(self._parse_email(email_data, download_attachments=False))
+
+        return emails
+
+    # =========================================================================
     # SHAREPOINT METHODS
     # =========================================================================
 

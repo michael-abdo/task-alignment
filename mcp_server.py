@@ -159,6 +159,128 @@ def list_emails(start_date: str, end_date: str, limit: int = 50) -> dict:
 
 
 @mcp.tool()
+def list_mail_folders() -> dict:
+    """
+    List all mail folders in the mailbox.
+
+    Returns:
+        dict with list of folders including Inbox, Archive, Sent Items, etc.
+    """
+    try:
+        client = get_client()
+        folders = client.list_mail_folders()
+        return {
+            "success": True,
+            "count": len(folders),
+            "folders": [
+                {
+                    "id": f.get("id", ""),
+                    "name": f.get("displayName", ""),
+                    "total_items": f.get("totalItemCount", 0),
+                    "unread_items": f.get("unreadItemCount", 0)
+                }
+                for f in folders
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def list_emails_from_folder(
+    folder: str = "Inbox",
+    start_date: str = "",
+    end_date: str = "",
+    limit: int = 50
+) -> dict:
+    """
+    List emails from a specific folder or all folders.
+
+    Args:
+        folder: Folder name - "Inbox", "Archive", "SentItems", "Drafts", "DeletedItems",
+                or "All" to search all folders (default: Inbox)
+        start_date: Optional start date filter (YYYY-MM-DD)
+        end_date: Optional end date filter (YYYY-MM-DD)
+        limit: Maximum number of emails to return (default 50)
+
+    Returns:
+        dict with list of emails from the specified folder
+    """
+    try:
+        client = get_client()
+
+        start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
+        end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+
+        emails = client.fetch_emails_from_folder(
+            folder=folder,
+            start_date=start,
+            end_date=end,
+            limit=limit,
+            download_attachments=False
+        )
+
+        return {
+            "success": True,
+            "count": len(emails),
+            "folder": folder,
+            "emails": [
+                {
+                    "id": e.id,
+                    "subject": e.subject,
+                    "sender": e.sender,
+                    "date": e.date,
+                    "has_attachments": len(e.attachments) > 0,
+                    "body_preview": e.body[:200] + "..." if len(e.body) > 200 else e.body
+                }
+                for e in emails
+            ]
+        }
+    except ValueError as e:
+        return {"success": False, "error": f"Invalid date format. Use YYYY-MM-DD. {e}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def search_emails(query: str, folder: str = "All", limit: int = 50) -> dict:
+    """
+    Search emails by keyword across subject, body, and sender.
+
+    Args:
+        query: Search query string
+        folder: Folder to search - "All" (default), "Inbox", "Archive", "SentItems"
+        limit: Maximum number of results (default 50)
+
+    Returns:
+        dict with list of matching emails
+    """
+    try:
+        client = get_client()
+        emails = client.search_emails(query=query, folder=folder, limit=limit)
+
+        return {
+            "success": True,
+            "count": len(emails),
+            "query": query,
+            "folder": folder,
+            "emails": [
+                {
+                    "id": e.id,
+                    "subject": e.subject,
+                    "sender": e.sender,
+                    "date": e.date,
+                    "has_attachments": len(e.attachments) > 0,
+                    "body_preview": e.body[:200] + "..." if len(e.body) > 200 else e.body
+                }
+                for e in emails
+            ]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
 def get_email(email_id: str) -> dict:
     """
     Get a specific email by ID.
