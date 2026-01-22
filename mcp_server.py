@@ -53,28 +53,46 @@ def get_client() -> OutlookEmailDownloader:
 # =============================================================================
 
 @mcp.tool()
-def send_email(to: str, subject: str, body: str, html: bool = False) -> dict:
+def send_email(to: str, subject: str, body: str, html: bool = False, attachments: str = None) -> dict:
     """
-    Send an email.
+    Send an email with optional attachments.
+
+    Features:
+    - Idempotency: Prevents duplicate sends within 5 minutes
+    - Adaptive timeout: Longer timeout for large attachments
+    - Timeout safety: Warns not to retry on timeout (email may have sent)
 
     Args:
         to: Recipient email address(es), comma-separated for multiple
         subject: Email subject line
         body: Email body content
         html: If True, send body as HTML. Default is plain text.
+        attachments: Comma-separated list of file paths to attach
 
     Returns:
-        dict with success status
+        dict with success status and details
     """
     try:
         client = get_client()
         recipients = [addr.strip() for addr in to.split(",")]
         body_type = "HTML" if html else "Text"
-        success = client.send_email(recipients, subject, body, body_type)
-        return {
-            "success": success,
-            "message": f"Email sent to {to}" if success else "Failed to send email"
-        }
+
+        # Parse attachments if provided
+        attachment_list = None
+        if attachments:
+            attachment_list = [a.strip() for a in attachments.split(",")]
+
+        result = client.send_email(recipients, subject, body, body_type, attachment_list)
+
+        # Handle dict return from updated send_email
+        if isinstance(result, dict):
+            return result
+        else:
+            # Backwards compatibility with old bool return
+            return {
+                "success": result,
+                "message": f"Email sent to {to}" if result else "Failed to send email"
+            }
     except Exception as e:
         return {"success": False, "error": str(e)}
 

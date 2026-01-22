@@ -326,21 +326,49 @@ class OutlookEmailDownloader:
         print(f"\nDownloaded {attachment_count} attachments to {attachments_dir}")
         print(f"\nAll files saved to: {session_dir}")
 
-    def send_email(self, to: List[str], subject: str, body: str, body_type: str = "Text") -> bool:
+    def send_email(self, to: List[str], subject: str, body: str, body_type: str = "Text", attachments: List[str] = None) -> dict:
         """
-        Send an email.
+        Send an email with optional attachments.
 
         Args:
             to: List of recipient email addresses
             subject: Email subject
             body: Email body content
             body_type: "Text" or "HTML"
+            attachments: List of file paths to attach
 
         Returns:
-            True if sent successfully, False otherwise
+            dict with success status and details
         """
+        import base64
+        import hashlib
+        import json
+        import time
+        from pathlib import Path
+
         if not self.token:
             raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        # Idempotency: Check if this email was recently sent (within 5 minutes)
+        sent_log_path = Path(__file__).parent / "downloads" / ".sent_emails_log.json"
+        email_hash = hashlib.md5(f"{sorted(to)}:{subject}".encode()).hexdigest()
+        current_time = time.time()
+
+        sent_log = {}
+        if sent_log_path.exists():
+            try:
+                sent_log = json.loads(sent_log_path.read_text())
+                # Clean up old entries (older than 5 minutes)
+                sent_log = {k: v for k, v in sent_log.items() if current_time - v < 300}
+            except:
+                sent_log = {}
+
+        if email_hash in sent_log:
+            elapsed = int(current_time - sent_log[email_hash])
+            print(f"\n⚠️  DUPLICATE PREVENTED: This email was sent {elapsed}s ago")
+            print(f"  To: {', '.join(to)}")
+            print(f"  Subject: {subject}")
+            return {"success": False, "reason": "duplicate", "message": f"Email already sent {elapsed}s ago"}
 
         user_path = f"users/{self.config.get('user_email')}" if self.config.get('user_email') else "me"
         url = f"{self.graph_endpoint}/{user_path}/sendMail"
@@ -362,18 +390,51 @@ class OutlookEmailDownloader:
             "saveToSentItems": True
         }
 
-        print(f"\nSending email...")
+        # Add attachments if provided
+        total_size = 0
+        if attachments:
+            attachment_list = []
+            for file_path in attachments:
+                path = Path(file_path)
+                if path.exists():
+                    with open(path, 'rb') as f:
+                        file_bytes = f.read()
+                        total_size += len(file_bytes)
+                        content = base64.b64encode(file_bytes).decode('utf-8')
+                    attachment_list.append({
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        "name": path.name,
+                        "contentBytes": content
+                    })
+                    print(f"  Attaching: {path.name} ({len(file_bytes):,} bytes)")
+                else:
+                    print(f"  Warning: File not found: {file_path}")
+            if attachment_list:
+                message["message"]["attachments"] = attachment_list
+
+        # Use longer timeout for large attachments (30s base + 10s per MB)
+        timeout_seconds = 30 + (total_size // 1_000_000) * 10
+        print(f"\nSending email (timeout: {timeout_seconds}s)...")
         print(f"  To: {', '.join(to)}")
         print(f"  Subject: {subject}")
 
-        response = requests.post(url, headers=self._get_headers(), json=message)
+        try:
+            response = requests.post(url, headers=self._get_headers(), json=message, timeout=timeout_seconds)
 
-        if response.status_code == 202:
-            print("Email sent successfully!")
-            return True
-        else:
-            print(f"Error sending email: {response.status_code} - {response.text}")
-            return False
+            if response.status_code == 202:
+                print("Email sent successfully!")
+                # Log this send for idempotency
+                sent_log[email_hash] = current_time
+                sent_log_path.parent.mkdir(parents=True, exist_ok=True)
+                sent_log_path.write_text(json.dumps(sent_log))
+                return {"success": True, "message": "Email sent successfully"}
+            else:
+                print(f"Error sending email: {response.status_code} - {response.text}")
+                return {"success": False, "status_code": response.status_code, "error": response.text}
+        except requests.exceptions.Timeout:
+            print(f"⚠️  Request timed out after {timeout_seconds}s - email MAY have been sent")
+            print("   Do NOT retry immediately - check sent folder first")
+            return {"success": False, "reason": "timeout", "message": "Request timed out - check sent folder before retrying"}
 
     def fetch_emails_range(
         self,
