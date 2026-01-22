@@ -10,6 +10,7 @@ from .models import (
     RequirementsContext,
 )
 from .checker import check_task_alignment
+from .ai_comparator import AIConfig
 
 __all__ = [
     "AlignmentStatus",
@@ -20,4 +21,5 @@ __all__ = [
     "RoadmapContext",
     "RequirementsContext",
     "check_task_alignment",
+    "AIConfig",
 ]

@@ -32,6 +32,12 @@ Examples:
 
   # Specify custom repo path
   python -m task_alignment --repo /path/to/repo "Update frontend component"
+
+  # Use AI-powered semantic comparison (requires OPENAI_API_KEY)
+  python -m task_alignment --ai "voice analysis for detecting frustration"
+
+  # Use AI with specific model
+  python -m task_alignment --ai --ai-model gpt-4o "implement user authentication"
         """
     )
 
@@ -70,6 +76,25 @@ Examples:
         help="Write output to file"
     )
 
+    parser.add_argument(
+        "--ai",
+        action="store_true",
+        help="Use AI-powered semantic comparison (requires OPENAI_API_KEY env var or --api-key)"
+    )
+
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        help="OpenAI API key (or set OPENAI_API_KEY env var)"
+    )
+
+    parser.add_argument(
+        "--ai-model",
+        type=str,
+        default="gpt-4o-mini",
+        help="OpenAI model to use (default: gpt-4o-mini)"
+    )
+
     args = parser.parse_args()
 
     checks = None
@@ -84,6 +109,9 @@ Examples:
             repo_path=repo_path,
             checks=checks,
             verbose=args.verbose,
+            use_ai=args.ai,
+            openai_api_key=args.api_key,
+            ai_model=args.ai_model,
         )
 
         if args.json:

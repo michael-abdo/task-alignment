@@ -29,6 +29,9 @@ def check_task_alignment(
     repo_path: Optional[Path] = None,
     checks: Optional[List[str]] = None,
     verbose: bool = False,
+    use_ai: bool = False,
+    openai_api_key: Optional[str] = None,
+    ai_model: str = "gpt-4o-mini",
 ) -> AlignmentReport:
     """
     Main entry point: validates a task against all sources of truth.
@@ -39,6 +42,9 @@ def check_task_alignment(
         checks: Optional list of checks to run (blueprint, codebase, roadmap, requirements, coherence)
                 If None, runs all checks.
         verbose: If True, print progress
+        use_ai: If True, use OpenAI for semantic comparison instead of keyword matching
+        openai_api_key: OpenAI API key (or set OPENAI_API_KEY env var)
+        ai_model: OpenAI model to use (default: gpt-4o-mini)
 
     Returns:
         AlignmentReport with alignment status and any conflicts found.
@@ -47,6 +53,14 @@ def check_task_alignment(
 
     all_checks = ["blueprint", "codebase", "roadmap", "requirements", "coherence"]
     checks_to_run = checks or all_checks
+
+    # Setup AI config if enabled
+    ai_config = None
+    if use_ai:
+        from .ai_comparator import AIConfig
+        ai_config = AIConfig(api_key=openai_api_key, model=ai_model)
+        if verbose:
+            print(f"Using AI mode with model: {ai_model}")
 
     contexts = {}
 
@@ -63,10 +77,14 @@ def check_task_alignment(
         if verbose:
             print(f"  Found {len(blueprint_context.diagrams)} relevant diagrams")
 
-        blueprint_result = compare_task_to_blueprint(
-            task=task_description,
-            architecture=blueprint_context
-        )
+        if use_ai:
+            from .ai_comparator import ai_compare_blueprint
+            blueprint_result = ai_compare_blueprint(task_description, blueprint_context, ai_config)
+        else:
+            blueprint_result = compare_task_to_blueprint(
+                task=task_description,
+                architecture=blueprint_context
+            )
         report.add_check(blueprint_result)
 
     # ─────────────────────────────────────────────────────────
@@ -82,10 +100,14 @@ def check_task_alignment(
         if verbose:
             print(f"  Found {len(codebase_context.files)} relevant files")
 
-        codebase_result = compare_task_to_codebase(
-            task=task_description,
-            code=codebase_context
-        )
+        if use_ai:
+            from .ai_comparator import ai_compare_codebase
+            codebase_result = ai_compare_codebase(task_description, codebase_context, ai_config)
+        else:
+            codebase_result = compare_task_to_codebase(
+                task=task_description,
+                code=codebase_context
+            )
         report.add_check(codebase_result)
 
     # ─────────────────────────────────────────────────────────
@@ -102,10 +124,14 @@ def check_task_alignment(
             print(f"  Found {len(roadmap_context.matches)} roadmap matches")
             print(f"  Found {len(roadmap_context.monday_items)} Monday.com items")
 
-        roadmap_result = compare_task_to_roadmap(
-            task=task_description,
-            roadmap=roadmap_context
-        )
+        if use_ai:
+            from .ai_comparator import ai_compare_roadmap
+            roadmap_result = ai_compare_roadmap(task_description, roadmap_context, ai_config)
+        else:
+            roadmap_result = compare_task_to_roadmap(
+                task=task_description,
+                roadmap=roadmap_context
+            )
         report.add_check(roadmap_result)
 
     # ─────────────────────────────────────────────────────────
@@ -122,10 +148,14 @@ def check_task_alignment(
             print(f"  Found {len(requirements_context.requirement_files)} requirement files")
             print(f"  Found {len(requirements_context.acceptance_criteria)} acceptance criteria")
 
-        requirements_result = compare_task_to_requirements(
-            task=task_description,
-            requirements=requirements_context
-        )
+        if use_ai:
+            from .ai_comparator import ai_compare_requirements
+            requirements_result = ai_compare_requirements(task_description, requirements_context, ai_config)
+        else:
+            requirements_result = compare_task_to_requirements(
+                task=task_description,
+                requirements=requirements_context
+            )
         report.add_check(requirements_result)
 
     # ─────────────────────────────────────────────────────────
@@ -135,12 +165,23 @@ def check_task_alignment(
         if verbose:
             print("Checking cross-source coherence...")
 
-        coherence_result = check_cross_source_coherence(
-            blueprint=contexts.get("blueprint", fetch_blueprint_context("")),
-            codebase=contexts.get("codebase", fetch_codebase_context("")),
-            roadmap=contexts.get("roadmap", fetch_roadmap_context("")),
-            requirements=contexts.get("requirements", fetch_requirements_context("")),
-        )
+        if use_ai:
+            from .ai_comparator import ai_cross_source_coherence
+            coherence_result = ai_cross_source_coherence(
+                task=task_description,
+                blueprint=contexts.get("blueprint", fetch_blueprint_context("")),
+                codebase=contexts.get("codebase", fetch_codebase_context("")),
+                roadmap=contexts.get("roadmap", fetch_roadmap_context("")),
+                requirements=contexts.get("requirements", fetch_requirements_context("")),
+                config=ai_config,
+            )
+        else:
+            coherence_result = check_cross_source_coherence(
+                blueprint=contexts.get("blueprint", fetch_blueprint_context("")),
+                codebase=contexts.get("codebase", fetch_codebase_context("")),
+                roadmap=contexts.get("roadmap", fetch_roadmap_context("")),
+                requirements=contexts.get("requirements", fetch_requirements_context("")),
+            )
         report.add_check(coherence_result)
 
     # ─────────────────────────────────────────────────────────
