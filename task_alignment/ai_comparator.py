@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import os
 import json
-from typing import Optional
+import re
+from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
 from .models import (
@@ -35,6 +36,66 @@ class AIConfig:
     def __post_init__(self):
         if not self.api_key:
             self.api_key = os.environ.get("OPENAI_API_KEY")
+
+    @property
+    def is_gpt5(self) -> bool:
+        """Check if using GPT-5 model (uses different API params)."""
+        return "gpt-5" in self.model.lower()
+
+    def get_token_param(self) -> dict:
+        """Return correct token parameter based on model."""
+        if self.is_gpt5:
+            return {"max_completion_tokens": self.max_tokens}
+        return {"max_tokens": self.max_tokens}
+
+    def get_temperature(self) -> dict:
+        """Return temperature param (GPT-5 nano doesn't support it)."""
+        if "nano" in self.model.lower():
+            return {}
+        return {"temperature": self.temperature}
+
+    def get_response_format(self) -> dict:
+        """Return response format (nano models may not support json_object)."""
+        if "nano" in self.model.lower():
+            return {}
+        return {"response_format": {"type": "json_object"}}
+
+
+def parse_ai_response(content: str, config: AIConfig) -> Dict[str, Any]:
+    """Parse AI response, handling both JSON and plain text."""
+    # Try JSON first
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to extract JSON from markdown code block
+    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # For nano models, parse plain text response
+    result = {
+        "alignment": "partial",
+        "confidence": 0.7,
+        "explanation": content[:500],
+        "matching_components": [],
+        "potential_conflicts": [],
+        "recommendations": [],
+    }
+
+    content_lower = content.lower()
+    if "align" in content_lower and "not" not in content_lower[:50]:
+        result["alignment"] = "aligned"
+    elif "conflict" in content_lower or "not align" in content_lower:
+        result["alignment"] = "conflict"
+    elif "missing" in content_lower or "not found" in content_lower:
+        result["alignment"] = "missing"
+
+    return result
 
 
 def get_openai_client(config: AIConfig):
@@ -94,12 +155,12 @@ Respond in JSON format:
                 {"role": "system", "content": "You are an expert software architect analyzing task alignment with system architecture."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            response_format={"type": "json_object"}
+            **config.get_temperature(),
+            **config.get_token_param(),
+            **config.get_response_format()
         )
 
-        analysis = json.loads(response.choices[0].message.content)
+        analysis = parse_ai_response(response.choices[0].message.content, config)
 
         result.raw_data["ai_analysis"] = analysis
         result.raw_data["model"] = config.model
@@ -187,12 +248,12 @@ Respond in JSON format:
                 {"role": "system", "content": "You are an expert software engineer analyzing code for potential duplication and integration points."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            response_format={"type": "json_object"}
+            **config.get_temperature(),
+            **config.get_token_param(),
+            **config.get_response_format()
         )
 
-        analysis = json.loads(response.choices[0].message.content)
+        analysis = parse_ai_response(response.choices[0].message.content, config)
 
         result.raw_data["ai_analysis"] = analysis
         result.raw_data["model"] = config.model
@@ -286,12 +347,12 @@ Respond in JSON format:
                 {"role": "system", "content": "You are a project manager analyzing task tracking and roadmap alignment."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            response_format={"type": "json_object"}
+            **config.get_temperature(),
+            **config.get_token_param(),
+            **config.get_response_format()
         )
 
-        analysis = json.loads(response.choices[0].message.content)
+        analysis = parse_ai_response(response.choices[0].message.content, config)
 
         result.raw_data["ai_analysis"] = analysis
         result.raw_data["model"] = config.model
@@ -388,12 +449,12 @@ Respond in JSON format:
                 {"role": "system", "content": "You are a business analyst evaluating task requirements completeness."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            response_format={"type": "json_object"}
+            **config.get_temperature(),
+            **config.get_token_param(),
+            **config.get_response_format()
         )
 
-        analysis = json.loads(response.choices[0].message.content)
+        analysis = parse_ai_response(response.choices[0].message.content, config)
 
         result.raw_data["ai_analysis"] = analysis
         result.raw_data["model"] = config.model
@@ -481,12 +542,12 @@ Respond in JSON format:
                 {"role": "system", "content": "You are a systems analyst checking cross-source coherence and traceability."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            response_format={"type": "json_object"}
+            **config.get_temperature(),
+            **config.get_token_param(),
+            **config.get_response_format()
         )
 
-        analysis = json.loads(response.choices[0].message.content)
+        analysis = parse_ai_response(response.choices[0].message.content, config)
 
         result.raw_data["ai_analysis"] = analysis
         result.raw_data["model"] = config.model
