@@ -44,9 +44,15 @@ A coherence-checking system that validates incoming tasks against multiple sourc
 │           OUTPUT                         │
 ├─────────────────────────────────────────┤
 │  ✓ Aligned      - proceed with task     │
+│  ✓ Gap          - not documented, OK    │
 │  ⚠ Conflicts    - resolve before start  │
-│  ? Missing Info - gather more context   │
 └─────────────────────────────────────────┘
+
+## Core Alignment Principle
+**Components must NOT CONTRADICT the blueprint architecture.**
+- Gaps (not yet documented) = acceptable, proceed
+- Contradictions (violates architecture) = block, resolve first
+See: Blueprint Diagrams/ALIGNMENT_PRINCIPLES.md
 ```
 
 ## Pseudo Code
@@ -231,7 +237,7 @@ def fetch_roadmap_context(task: str) -> RoadmapContext:
     
     Sources:
     - Monday.com boards
-    - Roadmap-SourceDoc-v08.xlsx (SharePoint)
+    - Roadmap-SourceDoc-2026.01.17ss.v07.xlsx (SharePoint)
     
     MCP Tools:
     - list_monday_boards()
@@ -309,28 +315,32 @@ def fetch_requirements_context(task: str) -> RequirementsContext:
 def compare_task_to_blueprint(task: str, architecture: BlueprintContext) -> CheckResult:
     """
     Compare task against architectural constraints.
-    
+
+    IMPORTANT: Gaps are acceptable, contradictions are not.
+    - Component not documented = gap (OK, proceed)
+    - Component contradicts architecture = conflict (BLOCK)
+
     Returns:
-    - ALIGNED: Task fits within architecture
-    - CONFLICT: Task violates architectural patterns
-    - MISSING: No relevant architecture found
+    - ALIGNED: Task fits within architecture (documented or gap with no conflict)
+    - CONFLICT: Task violates/contradicts architectural patterns
     """
     result = CheckResult(source="Blueprint")
-    
+
     # Check if task components exist in architecture
     task_components = extract_components(task)
     for component in task_components:
         if component in architecture.components:
             result.add_match(component, architecture.get_diagram(component))
         else:
-            result.add_missing(f"Component '{component}' not in architecture")
-    
-    # Check data flows
+            # Gap is OK - only contradictions fail
+            result.add_match(f"Component '{component}' - gap (not documented, no contradiction)")
+
+    # Check data flows - contradictions are NOT OK
     task_flows = extract_data_flows(task)
     for flow in task_flows:
         if not architecture.validates_flow(flow):
-            result.add_conflict(f"Data flow '{flow}' not supported")
-    
+            result.add_conflict(f"Data flow '{flow}' contradicts architecture")
+
     return result
 
 
@@ -407,10 +417,14 @@ def compare_task_to_requirements(task: str, requirements: RequirementsContext) -
 class AlignmentReport:
     """
     Final report structure returned by check_task_alignment()
+
+    Status Logic:
+    - ALIGNED: No contradictions (gaps are OK)
+    - CONFLICTS: Has contradictions (must resolve)
     """
     task: str
     checks: List[CheckResult]
-    overall_status: Status  # ALIGNED | CONFLICTS | MISSING_INFO
+    overall_status: Status  # ALIGNED | CONFLICTS
     
     def to_markdown(self) -> str:
         """Generate human-readable report"""

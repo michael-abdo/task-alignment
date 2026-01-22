@@ -34,6 +34,22 @@ flowchart TB
         PROFILE_DB[(Profile Store<br/>PostgreSQL)]
     end
 
+    subgraph "Mindscope Ingestion Pipeline (PSYC-F04)"
+        FETCH[["Dataset Fetcher (C01)<br/>─────────────────<br/>• GitHub API download<br/>• Checksum validation<br/>• 100% success rate"]]
+        PARSE[["Data Parser (C02)<br/>─────────────────<br/>• Mindscope → internal schema<br/>• Field extraction<br/>• 0 parse errors"]]
+        VALIDATE[["Schema Validator (C03)<br/>─────────────────<br/>• Type/range checks<br/>• Reject malformed<br/>• Log rejection reasons"]]
+        INGEST[["DB Ingestion (C04)<br/>─────────────────<br/>• Bulk insert<br/>• ≥1000 rec/sec<br/>• Batch transactions"]]
+        INCR[["Incremental Handler (C05)<br/>─────────────────<br/>• Hash/timestamp dedup<br/>• <5% redundant writes<br/>• Delta updates"]]
+        AUDIT[["Audit Trail (C06)<br/>─────────────────<br/>• Timestamp + counts<br/>• Source version<br/>• Query <1s"]]
+        ROLLBACK[["Rollback (C07)<br/>─────────────────<br/>• Transaction savepoints<br/>• <30s for 10k records<br/>• Integrity check"]]
+    end
+
+    %% Ingestion pipeline flow
+    FETCH --> PARSE --> VALIDATE --> INGEST --> PROFILE_DB
+    INGEST --> INCR
+    INGEST --> AUDIT
+    INGEST --> ROLLBACK
+
     subgraph "Profile Overlay Engine (PSYC-F04 | C02)"
         ENRICH[["Context Enrichment<br/>─────────────────<br/>• Appends Core traits only:<br/>  decision_pressure_trait_pct<br/>  authority_deference_post_senior_pct<br/>  cal_gap<br/>• Omits trait data when QC flag = true<br/>• Probabilistic language only"]]
     end
@@ -50,6 +66,10 @@ flowchart TB
 
         API[Unified API]
         SUMMARY[Post-Meeting Summary]
+        INSIGHTS[["Insights Report (PLAT-F11-C02)<br/>─────────────────<br/>• Behavioral patterns<br/>• Notable moments<br/>• Facilitator-actionable<br/>• Jump-to-moment links"]]
+        ACTIONS[["Action Items (PLAT-F11-C03)<br/>─────────────────<br/>• Auto-extract from transcript<br/>• Owner + due date<br/>• ≥70% precision"]]
+        EXPORT[["Report Export (PLAT-F11-C05)<br/>─────────────────<br/>• PDF + share link<br/>• All sections included<br/>• <10s export time"]]
+        HISTORY[["Historical Comparison (PLAT-F11-C06)<br/>─────────────────<br/>• vs historical averages<br/>• Delta indicators ±10%<br/>• <2s load time"]]
     end
 
     %% User Identity flows to Profile DB (PSYC-F00 is foundation)
@@ -77,7 +97,9 @@ flowchart TB
     ENRICH --> RAW
     RAW --> CONTEXT
     DRIFT --> CONTEXT
-    CONTEXT --> API & SUMMARY
+    CONTEXT --> API & SUMMARY & INSIGHTS & ACTIONS
+    SUMMARY & INSIGHTS & ACTIONS --> EXPORT
+    PROFILE_DB --> HISTORY
 
     %% Styling
     style ENRICH fill:#50c878,stroke:#3a9b5c,stroke-width:3px
@@ -110,3 +132,19 @@ flowchart TB
     style USERS fill:#ffcccb,stroke:#dc3545,stroke-width:2px
     style PROFILES fill:#ffcccb,stroke:#dc3545
     style MATCH fill:#ffcccb,stroke:#dc3545
+
+    %% Post-Meeting Report boxes (PLAT-F11)
+    style SUMMARY fill:#d1ecf1,stroke:#0c5460,stroke-width:2px
+    style INSIGHTS fill:#d1ecf1,stroke:#0c5460,stroke-width:2px
+    style ACTIONS fill:#d1ecf1,stroke:#0c5460,stroke-width:2px
+    style EXPORT fill:#d1ecf1,stroke:#0c5460,stroke-width:2px
+    style HISTORY fill:#d1ecf1,stroke:#0c5460,stroke-width:2px
+
+    %% Mindscope Ingestion Pipeline boxes (PSYC-F04)
+    style FETCH fill:#e2d5f1,stroke:#6f42c1,stroke-width:2px
+    style PARSE fill:#e2d5f1,stroke:#6f42c1,stroke-width:2px
+    style VALIDATE fill:#e2d5f1,stroke:#6f42c1,stroke-width:2px
+    style INGEST fill:#e2d5f1,stroke:#6f42c1,stroke-width:2px
+    style INCR fill:#e2d5f1,stroke:#6f42c1,stroke-width:2px
+    style AUDIT fill:#e2d5f1,stroke:#6f42c1,stroke-width:2px
+    style ROLLBACK fill:#e2d5f1,stroke:#6f42c1,stroke-width:2px

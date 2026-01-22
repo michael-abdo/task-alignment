@@ -9,7 +9,7 @@ from .models import (
     RoadmapContext,
     RequirementsContext,
 )
-from .checker import check_task_alignment
+from .checker import check_task_alignment, quick_check
 from .ai_comparator import AIConfig
 
 __all__ = [
@@ -21,5 +21,6 @@ __all__ = [
     "RoadmapContext",
     "RequirementsContext",
     "check_task_alignment",
+    "quick_check",
     "AIConfig",
 ]

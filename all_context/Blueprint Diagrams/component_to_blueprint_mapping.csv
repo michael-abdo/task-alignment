@@ -1,0 +1,19 @@
+Component ID,Component Name,Blueprint Diagram,Blueprint Element,Blueprint Feature ID,In Blueprint
+PLAT-F10-C07,Live Alerts with Severity,chunk2_07_flashpoint_fusion_v1.mmd,DOM[dominance_analyzer] → dominance alerts,CORE-F02,Yes
+PLAT-F10-C08,Accept/Dismiss Feedback Loop,chunk2_07_flashpoint_fusion_v1.mmd,FEEDBACK[Accept/Dismiss Feedback],PLAT-F10,Yes
+POST-F01-C01,Post-Meeting Reframing Summary,chunk4_01_psychometric_profile_overlay.mmd,SUMMARY[Post-Meeting Summary],POST-F01,Yes
+PLAT-F10-C09,Nudge Timing Intelligence,chunk2_07_flashpoint_fusion_v1.mmd,FLASH[Flashpoint Detector] → 20 sec cooldown,CORE-F06,Yes
+PLAT-F10-C10,Nudge Cooldown Management,chunk2_07_flashpoint_fusion_v1.mmd,FLASH[Flashpoint Detector] → 20 sec cooldown,CORE-F06,Yes
+PLAT-F11-C01,Summary View Page,chunk4_01_psychometric_profile_overlay.mmd,SUMMARY[Post-Meeting Summary],PLAT-F11,Yes
+PLAT-F11-C02,Insights Report Page,chunk4_01_psychometric_profile_overlay.mmd,INSIGHTS[Insights Report],PLAT-F11,Yes
+PLAT-F11-C03,Action Items Extraction,chunk4_01_psychometric_profile_overlay.mmd,ACTIONS[Action Items],PLAT-F11,Yes
+PLAT-F11-C04,Decision Log Page,chunk4_01_psychometric_profile_overlay.mmd,CONTEXT[Profile Context],PLAT-F11,Yes
+PLAT-F11-C05,Report Export,chunk4_01_psychometric_profile_overlay.mmd,EXPORT[Report Export],PLAT-F11,Yes
+PLAT-F11-C06,Historical Comparison,chunk4_01_psychometric_profile_overlay.mmd,HISTORY[Historical Comparison],PLAT-F11,Yes
+PSYC-F04-C01,Dataset Fetcher,chunk4_01_psychometric_profile_overlay.mmd,FETCH[Dataset Fetcher],PSYC-F04,Yes
+PSYC-F04-C02,Data Parser,chunk4_01_psychometric_profile_overlay.mmd,PARSE[Data Parser],PSYC-F04,Yes
+PSYC-F04-C03,Schema Validator,chunk4_01_psychometric_profile_overlay.mmd,VALIDATE[Schema Validator],PSYC-F04,Yes
+PSYC-F04-C04,Database Ingestion Pipeline,chunk4_01_psychometric_profile_overlay.mmd,INGEST[DB Ingestion] + PROFILE_DB,PSYC-F04,Yes
+PSYC-F04-C05,Incremental Update Handler,chunk4_01_psychometric_profile_overlay.mmd,INCR[Incremental Handler],PSYC-F04,Yes
+PSYC-F04-C06,Ingestion Audit Trail,chunk4_01_psychometric_profile_overlay.mmd,AUDIT[Audit Trail],PSYC-F04,Yes
+PSYC-F04-C07,Rollback Capability,chunk4_01_psychometric_profile_overlay.mmd,ROLLBACK[Rollback],PSYC-F04,Yes

@@ -34,6 +34,7 @@ flowchart TB
         REDIS[(Redis<br/>───────<br/>• Metrics cache<br/>• Time-series<br/>• Pub/sub)]
         TIMELINE[Timeline Events]
         ALERTS[Bias Alerts]
+        FEEDBACK[["Accept/Dismiss Feedback (PLAT-F10-C08)<br/>─────────────────<br/>• User acknowledges alert<br/>• Response → alert_responses table<br/>• 100% capture rate<br/>• Feeds analytics"]]
     end
 
     subgraph "API Layer"
@@ -63,6 +64,7 @@ flowchart TB
 
     REDIS --> API_HUME
     REDIS --> API_EXIST
+    ALERTS --> FEEDBACK
 
     %% Styling
     style FLASH fill:#50c878,stroke:#2e8b57,stroke-width:3px
@@ -71,3 +73,4 @@ flowchart TB
     style INT fill:#fff3cd,stroke:#856404,stroke-width:2px
     style TONE fill:#fff3cd,stroke:#856404,stroke-width:2px
     style DOM fill:#fff3cd,stroke:#856404,stroke-width:2px
+    style FEEDBACK fill:#d1ecf1,stroke:#0c5460,stroke-width:2px

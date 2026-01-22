@@ -18,6 +18,139 @@ from .models import (
 from .fetchers import extract_keywords
 
 
+# ============================================================================
+# BLUEPRINT ARCHITECTURE MAPPING
+# Maps success criteria component names to their blueprint architecture equivalents
+# This enables semantic matching between different naming conventions
+# ============================================================================
+
+BLUEPRINT_COMPONENT_ALIASES = {
+    # Flashpoint / Fusion Layer components
+    "flashpointevent": ["flashpoint detector", "flashpoint", "fusion layer", "timeline_event kind=flashpoint"],
+    "flashpoint_event": ["flashpoint detector", "flashpoint", "fusion layer"],
+    "flashpointdetector": ["flashpoint detector", "flashpoint", "fusion layer"],
+
+    # Dominance / Alert components
+    "dominancealert": ["dominance_analyzer", "dominance alerts", "dominance", "50% threshold"],
+    "dominance_alert": ["dominance_analyzer", "dominance alerts", "dominance"],
+    "livealerts": ["dominance alerts", "alert", "severity indicators", "alert notifications"],
+    "live_alerts": ["dominance alerts", "alert", "severity indicators"],
+    "severityindicators": ["severity indicators", "color-coded severity", "alert"],
+
+    # Post-Meeting / Summary components
+    "summarydocument": ["post-meeting summary", "summary", "narrative", "event_references"],
+    "summary_document": ["post-meeting summary", "summary", "narrative"],
+    "postmeetingsummary": ["post-meeting summary", "summary", "post meeting"],
+    "post_meeting_summary": ["post-meeting summary", "summary"],
+    "insightsreport": ["insights report", "insights", "behavioral patterns", "notable moments", "PLAT-F11-C02"],
+    "insights_report": ["insights report", "insights", "behavioral patterns"],
+    "actionitems": ["action items", "task", "owner", "due_date"],
+    "action_items": ["action items", "task", "owner"],
+    "decisionlog": ["decisions", "decision log", "statement", "maker", "context"],
+    "decision_log": ["decisions", "decision log"],
+
+    # Psychometric / Profile components
+    "profileoverlay": ["profile overlay engine", "psychometric profile", "profile context", "PSYC-F04"],
+    "profile_overlay": ["profile overlay engine", "psychometric profile", "profile"],
+    "psychometricprofile": ["psychometric profile", "profile store", "profile db", "PSYC-F04"],
+    "psychometric_profile": ["psychometric profile", "profile store"],
+    "assessmentimport": ["assessment import", "import pipeline", "DISC", "MBTI", "Big5"],
+    "assessment_import": ["assessment import", "import pipeline"],
+
+    # Nudge components
+    "nudgetiming": ["nudge", "timing", "pause points", "speech state"],
+    "nudge_timing": ["nudge", "timing", "pause"],
+    "nudgecooldown": ["cooldown", "20 sec cooldown", "alert fatigue"],
+    "nudge_cooldown": ["cooldown", "20 sec"],
+    "reframingsuggestions": ["reframing suggestions", "reframes_per_event", "recommendations"],
+    "reframing_suggestions": ["reframing suggestions", "reframes"],
+
+    # Data ingestion components
+    "datasetfetcher": ["dataset", "fetcher", "download", "github"],
+    "dataset_fetcher": ["dataset", "fetcher", "download"],
+    "dataparser": ["parser", "schema", "transform", "extract"],
+    "data_parser": ["parser", "schema", "transform"],
+    "schemavalidator": ["validator", "validation", "schema", "malformed"],
+    "schema_validator": ["validator", "validation"],
+    "ingestionpipeline": ["ingestion", "pipeline", "bulk insert", "batch"],
+    "ingestion_pipeline": ["ingestion", "pipeline", "bulk"],
+    "audittrail": ["audit", "log", "track", "metadata"],
+    "audit_trail": ["audit", "log", "track"],
+    "rollbackcapability": ["rollback", "transaction", "savepoint"],
+    "rollback_capability": ["rollback", "transaction"],
+}
+
+# Components intentionally out of MVP scope - don't warn about missing architecture
+OUT_OF_MVP_SCOPE = {
+    "assessmentimport",
+    "assessment_import",
+    "actionitems",
+    "action_items",
+}
+
+# Additional aliases (Hume / Emotion components)
+BLUEPRINT_COMPONENT_ALIASES.update({
+    "humeaudio": ["hume_audio", "audio_tension", "prosody", "hume"],
+    "hume_audio": ["hume_audio", "audio_tension", "prosody"],
+    "humeface": ["hume_face", "face_distress", "facial", "hume"],
+    "hume_face": ["hume_face", "face_distress", "facial"],
+
+    # Core detection components
+    "toneshift": ["tone shift", "tone_shift_detector", "tone"],
+    "tone_shift": ["tone shift", "tone_shift_detector"],
+    "interruptiondetector": ["interruption", "interrupt", "speaking turns"],
+    "interruption_detector": ["interruption", "interrupt"],
+    "safetycore": ["safety score", "safety_core", "fatigue"],
+    "safety_core": ["safety score", "safety_core"],
+})
+
+# Reverse mapping: blueprint terms -> canonical names
+BLUEPRINT_TERM_TO_CANONICAL = {}
+for canonical, aliases in BLUEPRINT_COMPONENT_ALIASES.items():
+    for alias in aliases:
+        alias_key = alias.lower().replace(" ", "").replace("_", "").replace("-", "")
+        if alias_key not in BLUEPRINT_TERM_TO_CANONICAL:
+            BLUEPRINT_TERM_TO_CANONICAL[alias_key] = canonical
+
+
+def normalize_component_name(name: str) -> str:
+    """Normalize a component name for comparison."""
+    return name.lower().replace(" ", "").replace("_", "").replace("-", "")
+
+
+def find_blueprint_aliases(component: str) -> List[str]:
+    """Find all blueprint aliases for a component name."""
+    normalized = normalize_component_name(component)
+
+    # Direct lookup
+    if normalized in BLUEPRINT_COMPONENT_ALIASES:
+        return BLUEPRINT_COMPONENT_ALIASES[normalized]
+
+    # Partial match
+    for key, aliases in BLUEPRINT_COMPONENT_ALIASES.items():
+        if normalized in key or key in normalized:
+            return aliases
+
+    return []
+
+
+def component_matches_blueprint(component: str, blueprint_text: str) -> bool:
+    """Check if a component matches blueprint text using aliases."""
+    blueprint_lower = blueprint_text.lower()
+
+    # Direct match
+    if normalize_component_name(component) in normalize_component_name(blueprint_text):
+        return True
+
+    # Alias match
+    aliases = find_blueprint_aliases(component)
+    for alias in aliases:
+        if alias.lower() in blueprint_lower:
+            return True
+
+    return False
+
+
 def extract_components_from_task(task: str) -> List[str]:
     """Extract component names mentioned in a task."""
     patterns = [
@@ -68,13 +201,28 @@ def extract_dependencies_from_task(task: str) -> List[str]:
 # BLUEPRINT COMPARATOR
 # ============================================================================
 
+# IMPORTANT PRINCIPLE: Components must NOT CONTRADICT the blueprint.
+# - Contradictions (FAIL): Component violates existing architecture
+# - Gaps (PASS): Component not yet documented but doesn't conflict
+# - Aligned (PASS): Component explicitly documented in blueprint
+#
+# Gaps are acceptable - contradictions are not.
+# See: component_to_blueprint_mapping.csv for explicit mapping
+
 def compare_task_to_blueprint(task: str, architecture: BlueprintContext) -> CheckResult:
     """
     Compare task against architectural constraints from Blueprint diagrams.
 
+    IMPORTANT: The goal is to detect CONTRADICTIONS, not just gaps.
+    - A component not in blueprint = gap (acceptable)
+    - A component that violates blueprint patterns = contradiction (fail)
+
+    Uses semantic alias matching to recognize equivalent component names
+    (e.g., "FlashpointEvent" matches "Flashpoint Detector" in blueprints).
+
     Returns:
-    - PASS: Task fits within architecture
-    - FAIL: Task violates architectural patterns
+    - PASS: Task fits within architecture (aligned or gap with no conflict)
+    - FAIL: Task violates/contradicts architectural patterns
     - MISSING: No relevant architecture found
     """
     result = CheckResult(source="Blueprint")
@@ -86,16 +234,21 @@ def compare_task_to_blueprint(task: str, architecture: BlueprintContext) -> Chec
     task_components = extract_components_from_task(task)
     keywords = extract_keywords(task)
 
+    # Collect all blueprint text for semantic matching
+    all_blueprint_text = ""
     for diagram in architecture.diagrams:
         result.add_match(
             f"Related diagram: {diagram.filename}",
             {"components": diagram.components, "flows": diagram.flows}
         )
+        all_blueprint_text += " " + diagram.content
 
     for component in task_components:
         component_lower = component.lower()
         found = False
+        matched_via_alias = False
 
+        # First try direct match in architecture components
         for arch_component in architecture.components:
             if component_lower in arch_component.lower():
                 diagram = architecture.get_diagram(arch_component)
@@ -103,8 +256,43 @@ def compare_task_to_blueprint(task: str, architecture: BlueprintContext) -> Chec
                 found = True
                 break
 
+        # If not found, try semantic alias matching against full blueprint content
         if not found:
-            result.add_warning(f"Component '{component}' not explicitly in architecture")
+            if component_matches_blueprint(component, all_blueprint_text):
+                aliases = find_blueprint_aliases(component)
+                matched_alias = next((a for a in aliases if a.lower() in all_blueprint_text.lower()), None)
+                if matched_alias:
+                    result.add_match(
+                        f"Component '{component}' → blueprint '{matched_alias}' (semantic match)"
+                    )
+                    found = True
+                    matched_via_alias = True
+
+        # If still not found, check if any alias exists in blueprint
+        if not found:
+            aliases = find_blueprint_aliases(component)
+            for alias in aliases:
+                for diagram in architecture.diagrams:
+                    if alias.lower() in diagram.content.lower():
+                        result.add_match(
+                            f"Component '{component}' → '{alias}' in {diagram.filename}"
+                        )
+                        found = True
+                        matched_via_alias = True
+                        break
+                if found:
+                    break
+
+        if not found:
+            # Check if component is out of MVP scope (don't warn)
+            normalized = normalize_component_name(component)
+            if normalized in OUT_OF_MVP_SCOPE:
+                result.add_match(f"Component '{component}' - out of MVP scope (no architecture needed)")
+                continue
+
+            # Gap (not documented) is OK - only contradictions would fail
+            # Mark as gap but don't warn - gaps are acceptable per ALIGNMENT_PRINCIPLES.md
+            result.add_match(f"Component '{component}' - gap (not yet documented, no contradiction)")
 
     task_flows = extract_data_flows_from_task(task)
     for flow in task_flows:
