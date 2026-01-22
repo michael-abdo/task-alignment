@@ -91,7 +91,7 @@ Zoom Meeting → RTMS WebSocket → Audio/Video/Transcript Streams
 
 ### Dominance Detection
 - Calculates talk time distribution across all participants
-- Flags when any individual exceeds threshold (e.g., >40% of meeting time)
+- Flags when any individual exceeds threshold (e.g., >50% of meeting time)
 - Updates in real-time as meeting progresses
 
 ### Tone Shift Detection
