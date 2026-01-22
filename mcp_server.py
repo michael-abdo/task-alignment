@@ -947,6 +947,135 @@ def move_monday_item(item_id: str, group_id: str) -> dict:
 
 
 # =============================================================================
+# TASK ALIGNMENT
+# =============================================================================
+
+@mcp.tool()
+def check_task_alignment(
+    task: str,
+    use_ai: bool = False,
+    checks: str = "blueprint,codebase,roadmap,requirements,coherence",
+    ai_model: str = "gpt-4o-mini"
+) -> dict:
+    """
+    Check if a task aligns with all sources of truth (architecture, codebase, roadmap, requirements).
+
+    Args:
+        task: Task description to validate (e.g., "implement tone shift detector")
+        use_ai: If True, use OpenAI for semantic comparison instead of keyword matching
+        checks: Comma-separated list of checks to run (blueprint,codebase,roadmap,requirements,coherence)
+        ai_model: OpenAI model to use when use_ai=True (default: gpt-4o-mini, or gpt-5-nano-2025-08-07)
+
+    Returns:
+        dict with alignment status and detailed report
+    """
+    try:
+        from task_alignment import check_task_alignment as _check_alignment
+
+        checks_list = [c.strip() for c in checks.split(",")]
+
+        report = _check_alignment(
+            task_description=task,
+            checks=checks_list,
+            use_ai=use_ai,
+            ai_model=ai_model,
+        )
+
+        return {
+            "success": True,
+            "task": task,
+            "overall_status": report.overall_status.value,
+            "overall_status_emoji": report.overall_status.emoji,
+            "checks": [
+                {
+                    "source": c.source,
+                    "status": c.status.value,
+                    "status_emoji": c.status.emoji,
+                    "matches": c.matches,
+                    "conflicts": c.conflicts,
+                    "missing": c.missing,
+                    "warnings": c.warnings,
+                }
+                for c in report.checks
+            ],
+            "markdown_report": report.to_markdown(),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def quick_task_check(task: str) -> dict:
+    """
+    Quick task alignment check with default settings (keyword matching, all sources).
+
+    Args:
+        task: Task description to validate
+
+    Returns:
+        dict with alignment status summary
+    """
+    try:
+        from task_alignment import check_task_alignment as _check_alignment
+
+        report = _check_alignment(task_description=task)
+
+        return {
+            "success": True,
+            "task": task,
+            "status": report.overall_status.value,
+            "emoji": report.overall_status.emoji,
+            "summary": f"{report.overall_status.emoji} {report.overall_status.value.upper()}: {len([c for c in report.checks if c.matches])} sources with matches",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def ai_task_check(task: str, model: str = "gpt-4o-mini") -> dict:
+    """
+    AI-powered semantic task alignment check using OpenAI.
+
+    Understands synonyms and related concepts (e.g., "voice analysis" matches "tone detection").
+    Requires OPENAI_API_KEY environment variable.
+
+    Args:
+        task: Task description to validate
+        model: OpenAI model (gpt-4o-mini, gpt-4o, gpt-5-nano-2025-08-07)
+
+    Returns:
+        dict with AI-analyzed alignment report
+    """
+    try:
+        from task_alignment import check_task_alignment as _check_alignment
+
+        report = _check_alignment(
+            task_description=task,
+            use_ai=True,
+            ai_model=model,
+        )
+
+        return {
+            "success": True,
+            "task": task,
+            "model": model,
+            "overall_status": report.overall_status.value,
+            "overall_status_emoji": report.overall_status.emoji,
+            "checks": [
+                {
+                    "source": c.source,
+                    "status": c.status.value,
+                    "matches": c.matches[:5],  # Limit for readability
+                    "warnings": c.warnings[:3],
+                }
+                for c in report.checks
+            ],
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
