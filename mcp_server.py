@@ -947,7 +947,420 @@ def move_monday_item(item_id: str, group_id: str) -> dict:
 
 
 # =============================================================================
-# TASK ALIGNMENT
+# TASK ALIGNMENT - REMOTE FETCHERS
+# =============================================================================
+
+@mcp.tool()
+def fetch_blueprint_context(task: str) -> dict:
+    """
+    Fetch blueprint architecture diagrams relevant to a task.
+
+    Searches local Blueprint Diagrams folder for .mmd files matching task keywords.
+    Use this before creating deliverables to understand the architecture.
+
+    Args:
+        task: Task description to find relevant blueprints for
+
+    Returns:
+        dict with relevant diagrams and their content summaries
+    """
+    try:
+        from pathlib import Path
+
+        blueprint_dir = Path("/Users/Mike/Library/Mobile Documents/com~apple~CloudDocs/2025-2030/Xenodex/greg/~non-code/outlook-fetcher/all_context/Blueprint Diagrams")
+
+        if not blueprint_dir.exists():
+            return {"success": False, "error": "Blueprint directory not found"}
+
+        diagrams = []
+        keywords = task.lower().split()
+
+        for mmd_file in blueprint_dir.glob("*.mmd"):
+            content = mmd_file.read_text()
+            content_lower = content.lower()
+
+            # Check if any keyword matches
+            relevance_score = sum(1 for kw in keywords if kw in content_lower or kw in mmd_file.name.lower())
+
+            if relevance_score > 0:
+                # Extract key elements (subgraphs, nodes)
+                lines = content.split('\n')
+                elements = [l.strip() for l in lines if 'subgraph' in l.lower() or '[' in l][:10]
+
+                diagrams.append({
+                    "name": mmd_file.name,
+                    "relevance_score": relevance_score,
+                    "elements": elements,
+                    "content_preview": content[:500] + "..." if len(content) > 500 else content
+                })
+
+        # Sort by relevance
+        diagrams.sort(key=lambda x: x["relevance_score"], reverse=True)
+
+        return {
+            "success": True,
+            "count": len(diagrams),
+            "task": task,
+            "diagrams": diagrams[:10]  # Top 10 most relevant
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def fetch_roadmap_context(task: str) -> dict:
+    """
+    Fetch roadmap entries relevant to a task from the v07 xlsx.
+
+    Searches the Roadmap spreadsheet for features and components matching task keywords.
+    Use this to find feature IDs, component IDs, owners, and status.
+
+    Args:
+        task: Task description to find relevant roadmap entries for
+
+    Returns:
+        dict with matching roadmap entries
+    """
+    try:
+        from pathlib import Path
+        import openpyxl
+
+        roadmap_path = Path("/Users/Mike/Library/Mobile Documents/com~apple~CloudDocs/2025-2030/Xenodex/greg/~non-code/outlook-fetcher/downloads/sharepoint/Roadmap-SourceDoc-2026.01.17ss.v07.xlsx")
+
+        if not roadmap_path.exists():
+            return {"success": False, "error": "Roadmap file not found"}
+
+        wb = openpyxl.load_workbook(roadmap_path, read_only=True, data_only=True)
+
+        matches = []
+        keywords = task.lower().split()
+
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+            headers = [cell.value for cell in sheet[1]] if sheet.max_row > 0 else []
+
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                row_text = " ".join(str(cell or "") for cell in row).lower()
+
+                # Check if any keyword matches
+                if any(kw in row_text for kw in keywords):
+                    row_dict = dict(zip(headers, row)) if headers else {"values": row}
+                    matches.append({
+                        "sheet": sheet_name,
+                        "feature_id": row_dict.get("Feature ID") or row_dict.get("feature_id"),
+                        "component_id": row_dict.get("Component ID") or row_dict.get("component_id"),
+                        "name": row_dict.get("Component Name") or row_dict.get("Feature") or row_dict.get("Name"),
+                        "status": row_dict.get("Status") or row_dict.get("status"),
+                        "owner": row_dict.get("Owner") or row_dict.get("owner"),
+                        "raw": {k: str(v)[:100] for k, v in row_dict.items() if v}
+                    })
+
+        wb.close()
+
+        return {
+            "success": True,
+            "count": len(matches),
+            "task": task,
+            "matches": matches[:50]  # Limit to 50
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def fetch_requirements_context(task: str) -> dict:
+    """
+    Fetch success criteria and requirements relevant to a task.
+
+    Searches deliverables CSVs for acceptance criteria and success metrics.
+    Use this to understand what "done" means for a task.
+
+    Args:
+        task: Task description to find relevant requirements for
+
+    Returns:
+        dict with matching requirements and success criteria
+    """
+    try:
+        from pathlib import Path
+        import csv
+
+        deliverables_dir = Path("/Users/Mike/Library/Mobile Documents/com~apple~CloudDocs/2025-2030/Xenodex/greg/~non-code/components/deliverables")
+
+        if not deliverables_dir.exists():
+            return {"success": False, "error": "Deliverables directory not found"}
+
+        requirements = []
+        keywords = task.lower().split()
+
+        for csv_file in deliverables_dir.glob("**/*.csv"):
+            try:
+                with open(csv_file, 'r') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        row_text = " ".join(str(v or "") for v in row.values()).lower()
+
+                        if any(kw in row_text for kw in keywords):
+                            requirements.append({
+                                "file": csv_file.name,
+                                "component_id": row.get("Component ID"),
+                                "component_name": row.get("Component Name"),
+                                "success_criteria": row.get("Success Criteria"),
+                                "acceptance_test": row.get("Acceptance Test"),
+                                "done_means": row.get("Done Means")
+                            })
+            except Exception:
+                continue
+
+        return {
+            "success": True,
+            "count": len(requirements),
+            "task": task,
+            "requirements": requirements[:30]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def fetch_codebase_context(task: str, max_files: int = 20) -> dict:
+    """
+    Fetch codebase files relevant to a task from the xcellerate-eq repo.
+
+    Searches the local codebase for Python files matching task keywords.
+    Use this to understand existing implementations before creating new code.
+
+    Args:
+        task: Task description to find relevant code for
+        max_files: Maximum number of files to return (default 20)
+
+    Returns:
+        dict with matching code files and their content previews
+    """
+    try:
+        from pathlib import Path
+
+        repo_path = Path("/Users/Mike/Library/Mobile Documents/com~apple~CloudDocs/2025-2030/Xenodex/greg/xcellerate-eq")
+
+        if not repo_path.exists():
+            return {"success": False, "error": "Codebase directory not found"}
+
+        files = []
+        keywords = task.lower().split()
+
+        for py_file in repo_path.rglob("*.py"):
+            if "__pycache__" in str(py_file) or ".git" in str(py_file):
+                continue
+
+            try:
+                content = py_file.read_text()
+                content_lower = content.lower()
+                filename_lower = py_file.name.lower()
+
+                # Check relevance
+                relevance = sum(1 for kw in keywords if kw in content_lower or kw in filename_lower)
+
+                if relevance > 0:
+                    # Extract function/class names
+                    import re
+                    functions = re.findall(r'def (\w+)\(', content)[:5]
+                    classes = re.findall(r'class (\w+)', content)[:3]
+
+                    files.append({
+                        "path": str(py_file.relative_to(repo_path)),
+                        "relevance": relevance,
+                        "functions": functions,
+                        "classes": classes,
+                        "preview": content[:300] + "..." if len(content) > 300 else content
+                    })
+            except Exception:
+                continue
+
+        # Sort by relevance
+        files.sort(key=lambda x: x["relevance"], reverse=True)
+
+        return {
+            "success": True,
+            "count": len(files),
+            "task": task,
+            "files": files[:max_files]
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def validate_output_alignment(
+    output_description: str,
+    output_content: str,
+    checks: str = "blueprint,roadmap,requirements"
+) -> dict:
+    """
+    Validate that an output (CSV, code, etc.) doesn't contradict sources of truth.
+
+    Use this AFTER creating a deliverable to ensure it aligns with architecture,
+    roadmap, and requirements. Returns conflicts that need to be resolved.
+
+    Args:
+        output_description: What the output is (e.g., "success criteria CSV for PLAT-F10")
+        output_content: The actual content to validate (CSV text, code, etc.)
+        checks: Comma-separated sources to check against (blueprint,roadmap,requirements)
+
+    Returns:
+        dict with validation results and any conflicts found
+    """
+    try:
+        from pathlib import Path
+
+        conflicts = []
+        warnings = []
+        matches = []
+
+        output_lower = output_content.lower()
+        checks_list = [c.strip() for c in checks.split(",")]
+
+        # Check Blueprint alignment
+        if "blueprint" in checks_list:
+            blueprint_dir = Path("/Users/Mike/Library/Mobile Documents/com~apple~CloudDocs/2025-2030/Xenodex/greg/~non-code/outlook-fetcher/all_context/Blueprint Diagrams")
+
+            if blueprint_dir.exists():
+                # Check component_to_blueprint_mapping.csv
+                mapping_file = blueprint_dir / "component_to_blueprint_mapping.csv"
+                if mapping_file.exists():
+                    import csv
+                    with open(mapping_file, 'r') as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            comp_id = row.get("Component ID", "")
+                            if comp_id and comp_id.lower() in output_lower:
+                                if row.get("In Blueprint") == "Yes":
+                                    matches.append(f"Component {comp_id} is in blueprint")
+                                else:
+                                    warnings.append(f"Component {comp_id} not documented in blueprint (gap)")
+
+                # Check for threshold contradictions
+                if "50%" in output_content and "dominance" in output_lower:
+                    matches.append("Dominance threshold 50% matches blueprint")
+                elif "40%" in output_content and "dominance" in output_lower:
+                    conflicts.append("CONFLICT: Output uses 40% dominance threshold but blueprint specifies 50%")
+
+                if "400ms" in output_content and "interruption" in output_lower:
+                    matches.append("Interruption threshold 400ms matches blueprint")
+
+        # Check Roadmap alignment
+        if "roadmap" in checks_list:
+            import openpyxl
+            roadmap_path = Path("/Users/Mike/Library/Mobile Documents/com~apple~CloudDocs/2025-2030/Xenodex/greg/~non-code/outlook-fetcher/downloads/sharepoint/Roadmap-SourceDoc-2026.01.17ss.v07.xlsx")
+
+            if roadmap_path.exists():
+                # Extract component IDs from output
+                import re
+                component_ids = re.findall(r'[A-Z]+-F\d+-C\d+', output_content)
+                feature_ids = re.findall(r'[A-Z]+-F\d+', output_content)
+
+                if component_ids:
+                    matches.append(f"Found {len(component_ids)} component IDs in output")
+
+                # Verify IDs exist in roadmap
+                wb = openpyxl.load_workbook(roadmap_path, read_only=True, data_only=True)
+                roadmap_text = ""
+                for sheet in wb.sheetnames:
+                    for row in wb[sheet].iter_rows(values_only=True):
+                        roadmap_text += " ".join(str(c or "") for c in row) + " "
+                wb.close()
+
+                for comp_id in component_ids:
+                    if comp_id in roadmap_text:
+                        matches.append(f"Component {comp_id} found in roadmap")
+                    else:
+                        warnings.append(f"Component {comp_id} not found in roadmap v07")
+
+        # Check Requirements alignment
+        if "requirements" in checks_list:
+            deliverables_dir = Path("/Users/Mike/Library/Mobile Documents/com~apple~CloudDocs/2025-2030/Xenodex/greg/~non-code/components/deliverables")
+
+            if deliverables_dir.exists():
+                # Check success criteria format
+                if "(<" in output_content or "(>" in output_content or "(±" in output_content:
+                    matches.append("Success criteria follow <outcome> (<metric>) format")
+                elif "success criteria" in output_lower:
+                    warnings.append("Success criteria may not follow required format")
+
+        # Determine overall status
+        if conflicts:
+            status = "CONFLICTS"
+            emoji = "⚠"
+        elif warnings and not matches:
+            status = "WARNING"
+            emoji = "?"
+        else:
+            status = "ALIGNED"
+            emoji = "✓"
+
+        return {
+            "success": True,
+            "status": status,
+            "emoji": emoji,
+            "output_description": output_description,
+            "matches": matches,
+            "conflicts": conflicts,
+            "warnings": warnings,
+            "recommendation": "Resolve conflicts before finalizing" if conflicts else "Output aligns with sources of truth"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def get_all_context(task: str) -> dict:
+    """
+    Fetch context from ALL sources of truth for a task in one call.
+
+    Use this before starting work on a task to understand:
+    - Blueprint: Architecture constraints
+    - Roadmap: Feature/component IDs, owners, status
+    - Requirements: Success criteria, acceptance tests
+    - Codebase: Existing implementations
+
+    Args:
+        task: Task description to gather context for
+
+    Returns:
+        dict with combined context from all sources
+    """
+    try:
+        blueprint = fetch_blueprint_context(task)
+        roadmap = fetch_roadmap_context(task)
+        requirements = fetch_requirements_context(task)
+        codebase = fetch_codebase_context(task, max_files=10)
+
+        return {
+            "success": True,
+            "task": task,
+            "blueprint": {
+                "diagrams_found": blueprint.get("count", 0),
+                "relevant_diagrams": [d["name"] for d in blueprint.get("diagrams", [])[:5]]
+            },
+            "roadmap": {
+                "matches_found": roadmap.get("count", 0),
+                "features": list(set(m.get("feature_id") for m in roadmap.get("matches", []) if m.get("feature_id")))[:10]
+            },
+            "requirements": {
+                "requirements_found": requirements.get("count", 0),
+                "components": list(set(r.get("component_id") for r in requirements.get("requirements", []) if r.get("component_id")))[:10]
+            },
+            "codebase": {
+                "files_found": codebase.get("count", 0),
+                "relevant_files": [f["path"] for f in codebase.get("files", [])[:5]]
+            },
+            "summary": f"Found context in {sum([1 for x in [blueprint, roadmap, requirements, codebase] if x.get('count', 0) > 0])}/4 sources"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# TASK ALIGNMENT - FULL CHECK
 # =============================================================================
 
 @mcp.tool()
