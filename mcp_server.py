@@ -627,6 +627,49 @@ def get_sharepoint_file_info(site_id: str, drive_id: str, item_id: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+@mcp.tool()
+def download_sharepoint_file(
+    site_id: str,
+    drive_id: str,
+    item_id: str,
+    filename: str,
+    output_dir: str = ""
+) -> dict:
+    """
+    Download a SharePoint file and save it to disk.
+
+    Args:
+        site_id: The SharePoint site ID
+        drive_id: The drive/document library ID
+        item_id: The file item ID
+        filename: Name to save the file as
+        output_dir: Optional directory to save to (default: downloads/sharepoint)
+
+    Returns:
+        dict with file path or error
+    """
+    try:
+        client = get_client()
+        saved_path = client.save_sharepoint_file(
+            site_id=site_id,
+            drive_id=drive_id,
+            item_id=item_id,
+            filename=filename,
+            output_dir=output_dir if output_dir else None
+        )
+
+        if saved_path:
+            return {
+                "success": True,
+                "message": f"File saved successfully",
+                "path": saved_path
+            }
+        else:
+            return {"success": False, "error": "Failed to download file"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # =============================================================================
 # MONDAY.COM - READ
 # =============================================================================

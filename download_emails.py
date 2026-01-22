@@ -963,6 +963,44 @@ class OutlookEmailDownloader:
 
         return files
 
+    def save_sharepoint_file(
+        self,
+        site_id: str,
+        drive_id: str,
+        item_id: str,
+        filename: str,
+        output_dir: str = None
+    ) -> Optional[str]:
+        """
+        Download and save a SharePoint file to disk.
+
+        Args:
+            site_id: The SharePoint site ID
+            drive_id: The drive/document library ID
+            item_id: The file item ID
+            filename: Name to save the file as
+            output_dir: Directory to save to (default: downloads/sharepoint)
+
+        Returns:
+            Path to saved file or None if failed
+        """
+        content = self.get_sharepoint_file_content(site_id, drive_id, item_id)
+        if content is None:
+            return None
+
+        if output_dir is None:
+            output_dir = Path(__file__).parent / "downloads" / "sharepoint"
+        else:
+            output_dir = Path(output_dir)
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        file_path = output_dir / filename
+
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        return str(file_path)
+
 
 def cmd_download(args):
     """Download emails command."""
